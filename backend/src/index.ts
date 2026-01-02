@@ -5,15 +5,15 @@ import * as express from 'express';
 
 const server = express();
 
-export const createNestServer = async (expressInstance) => {
+export const createNestServer = async (expressInstance: any) => {
   const app = await NestFactory.create(
     AppModule,
     new ExpressAdapter(expressInstance),
   );
   
-  // Enable CORS so your frontend can talk to it
+  // Enable CORS
   app.enableCors({
-    origin: '*', // Allow all origins (easiest for Vercel)
+    origin: '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
