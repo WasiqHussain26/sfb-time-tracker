@@ -3,7 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service'; // <--- Import MailService
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { v4 as uuidv4 } from 'uuid'; 
+import { randomUUID } from 'crypto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
@@ -18,7 +19,7 @@ export class UsersService {
     const existing = await this.prisma.user.findUnique({ where: { email: createUserDto.email } });
     if (existing) throw new BadRequestException('User already exists');
 
-    const token = uuidv4(); 
+    const token = randomUUID(); 
 
     // Create user with "INVITED" status, NO password, and Default Auto-Stop
     const user = await this.prisma.user.create({
