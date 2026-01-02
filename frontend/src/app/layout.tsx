@@ -4,6 +4,7 @@ import './globals.css';
 // 1. IMPORT TOASTER
 import { Toaster } from 'react-hot-toast';
 import AuthGuard from '@/components/AuthGuard'; // Import it
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {

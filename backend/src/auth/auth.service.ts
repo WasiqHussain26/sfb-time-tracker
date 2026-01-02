@@ -1,28 +1,33 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
+import { UsersService } from '../users/users.service'; // <--- IMPORT THIS
+import { MailService } from '../mail/mail.service';   // <--- IMPORT THIS
 import * as bcrypt from 'bcrypt';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { LoginAuthDto } from './dto/login-auth.dto';
 
 @Injectable()
 export class AuthService {
-  constructor(private prisma: PrismaService, private jwtService: JwtService) {}
+  constructor(
+    private prisma: PrismaService, 
+    private jwtService: JwtService,
+    private usersService: UsersService, // <--- INJECT THIS
+    private mailService: MailService    // <--- INJECT THIS
+  ) {}
 
   // 1. REGISTER (Sign Up - For Employer/Owner)
   async register(createAuthDto: CreateAuthDto) {
-    // Hash the password so it's secure
     const hashedPassword = await bcrypt.hash(createAuthDto.password, 10);
 
-    // Create user in DB
     const user = await this.prisma.user.create({
       data: {
         email: createAuthDto.email,
         password: hashedPassword,
-        role: 'EMPLOYER', // First user is always an Employer (Owner)
+        role: 'EMPLOYER',
         name: createAuthDto.name,
-        status: 'ACTIVE', // Default status for owner
-        autoStopLimit: 5, // Default setting
+        status: 'ACTIVE',
+        autoStopLimit: 5,
       },
     });
 
@@ -33,28 +38,23 @@ export class AuthService {
   async login(loginAuthDto: LoginAuthDto) {
     const { email, password } = loginAuthDto;
 
-    // 1. Find User
     const user = await this.prisma.user.findUnique({ where: { email } });
 
-    // 2. Check if user exists AND has a password
     if (!user || !user.password) {
       throw new UnauthorizedException('Invalid credentials or account not setup');
     }
 
-    // --- NEW: INACTIVE CHECK ---
-    // If the user was deactivated by the employer, block access immediately.
+    // Check Inactive Status
     if (user.status === 'DISABLED') {
       throw new ForbiddenException('Your account has been deactivated. Please contact your administrator.');
     }
 
-    // 3. Check Password
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // 4. Generate Token
     const payload = { 
       sub: user.id, 
       email: user.email, 
@@ -62,7 +62,6 @@ export class AuthService {
       name: user.name 
     };
 
-    // 5. Return Token & User Data (including the autoStopLimit settings)
     return {
       access_token: await this.jwtService.signAsync(payload),
       user: {
@@ -71,8 +70,47 @@ export class AuthService {
         email: user.email,
         role: user.role,
         status: user.status,
-        autoStopLimit: user.autoStopLimit // <--- Sending this to Desktop App!
+        autoStopLimit: user.autoStopLimit
       },
     };
+  }
+
+  // 3. FORGOT PASSWORD (Send Email)
+  async forgotPassword(email: string) {
+    // Check if user exists using UsersService
+    const user = await this.usersService.findByEmail(email);
+    
+    // Security: Do not reveal if email doesn't exist. Just return success.
+    if (!user) {
+      return { message: 'If an account exists, a reset link has been sent.' };
+    }
+
+    // Generate a temporary token valid for 15 minutes
+    const payload = { sub: user.id, email: user.email };
+    const token = this.jwtService.sign(payload, { expiresIn: '15m' });
+
+    // Create the Link (Points to your Frontend)
+    const resetLink = `https://sfbtimetracker.com/reset-password?token=${token}`;
+
+    // Send Email
+    await this.mailService.sendPasswordReset(user.email, user.name || 'User', resetLink);
+
+    return { message: 'Reset link sent' };
+  }
+
+  // 4. RESET PASSWORD (Verify & Update)
+  async resetPassword(token: string, newPassword: string) {
+    try {
+      // Verify the token
+      const payload = this.jwtService.verify(token);
+      
+      // Update the user
+      // Note: We pass the raw password because UsersService.update() now handles the hashing
+      await this.usersService.update(payload.sub, { password: newPassword });
+
+      return { message: 'Password reset successfully' };
+    } catch (error) {
+      throw new BadRequestException('Invalid or expired token');
+    }
   }
 }

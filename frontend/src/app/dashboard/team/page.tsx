@@ -5,10 +5,15 @@ import toast from 'react-hot-toast';
 export default function TeamPage() {
   const [users, setUsers] = useState<any[]>([]);
   
-  // Modals
+  // --- MODAL STATES ---
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(false);
   
+  // New: Edit User Modal State
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<{ id: number; name: string; email: string } | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', password: '' });
+
   const [currentUserRole, setCurrentUserRole] = useState('');
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [globalLimit, setGlobalLimit] = useState<number>(5);
@@ -29,7 +34,7 @@ export default function TeamPage() {
       
       if (!token) return;
 
-      const res = await fetch('https://sfb-backend.vercel.app/users', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
          headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -52,13 +57,57 @@ export default function TeamPage() {
 
   // --- HANDLERS ---
 
+  // 1. OPEN EDIT MODAL
+  const openEditModal = (user: any) => {
+    setEditingUser(user);
+    setEditForm({ name: user.name, password: '' }); // Password empty by default
+    setIsEditOpen(true);
+  };
+
+  // 2. SUBMIT EDIT (Name Change + Optional Password Reset)
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    const token = localStorage.getItem('token');
+    const toastId = toast.loading("Updating user...");
+
+    // Construct Payload (only send password if typed)
+    const payload: any = { name: editForm.name };
+    if (editForm.password.trim() !== '') {
+        payload.password = editForm.password;
+    }
+
+    try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${editingUser.id}`, {
+            method: 'PATCH',
+            headers: { 
+                'Content-Type': 'application/json', 
+                Authorization: `Bearer ${token}` 
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            toast.success("User updated successfully!", { id: toastId });
+            setIsEditOpen(false);
+            fetchUsers(); // Refresh list
+        } else {
+            toast.error("Failed to update user", { id: toastId });
+        }
+    } catch (err) {
+        toast.error("Network Error", { id: toastId });
+    }
+  };
+
+  // 3. GLOBAL SETTINGS
   const handleGlobalSettingsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
     const toastId = toast.loading("Updating company policy...");
 
     try {
-        const res = await fetch('https://sfb-backend.vercel.app/users/global-settings', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/global-settings`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ autoStopLimit: Number(globalLimit) })
@@ -74,6 +123,7 @@ export default function TeamPage() {
     } catch (err) { toast.error("Network Error", { id: toastId }); }
   };
 
+  // 4. TOGGLE STATUS
   const toggleUserStatus = async (userId: number, newStatus: string) => {
     const action = newStatus === 'DISABLED' ? 'Deactivate' : 'Reactivate';
     if (!confirm(`Are you sure you want to ${action} this user?`)) return;
@@ -82,7 +132,7 @@ export default function TeamPage() {
     const toastId = toast.loading(`${action}ing user...`);
 
     try {
-        const res = await fetch(`https://sfb-backend.vercel.app/users/${userId}/status`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${userId}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ status: newStatus })
@@ -97,12 +147,13 @@ export default function TeamPage() {
     } catch (e) { toast.error("Error", { id: toastId }); }
   };
   
+  // 5. INVITE
   const handleInviteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
     const toastId = toast.loading("Sending invite...");
     try {
-      const res = await fetch('https://sfb-backend.vercel.app/users/invite', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(formData),
@@ -128,6 +179,7 @@ export default function TeamPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       
+      {/* HEADER */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-800">Team Management</h2>
         
@@ -143,6 +195,7 @@ export default function TeamPage() {
         )}
       </div>
 
+      {/* TABS */}
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex gap-6">
           <button onClick={() => setActiveTab('ACTIVE')} className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'ACTIVE' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>
@@ -154,6 +207,7 @@ export default function TeamPage() {
         </nav>
       </div>
 
+      {/* TABLE */}
       <div className="bg-white rounded shadow border border-gray-200 overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-50 border-b border-gray-200">
@@ -183,17 +237,28 @@ export default function TeamPage() {
                     {user.role}
                 </td>
                 
-                <td className="px-6 py-4 text-right">
+                <td className="px-6 py-4 text-right flex justify-end gap-2 items-center h-full mt-3">
                     {canManage && user.role !== 'EMPLOYER' && (
-                        activeTab === 'ACTIVE' ? (
-                            <button onClick={() => toggleUserStatus(user.id, 'DISABLED')} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 hover:bg-red-50 px-3 py-1 rounded">
-                                Deactivate
+                        <>
+                            {/* EDIT BUTTON (Name & Password) */}
+                            <button 
+                                onClick={() => openEditModal(user)}
+                                className="text-blue-600 hover:text-blue-900 text-xs font-medium border border-blue-200 px-3 py-1 rounded hover:bg-blue-50 mr-2"
+                            >
+                                Edit / Reset Pass
                             </button>
-                        ) : (
-                            <button onClick={() => toggleUserStatus(user.id, 'ACTIVE')} className="text-green-500 hover:text-green-700 text-xs font-bold border border-green-200 hover:bg-green-50 px-3 py-1 rounded">
-                                Reactivate
-                            </button>
-                        )
+
+                            {/* DEACTIVATE BUTTON */}
+                            {activeTab === 'ACTIVE' ? (
+                                <button onClick={() => toggleUserStatus(user.id, 'DISABLED')} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 hover:bg-red-50 px-3 py-1 rounded">
+                                    Deactivate
+                                </button>
+                            ) : (
+                                <button onClick={() => toggleUserStatus(user.id, 'ACTIVE')} className="text-green-500 hover:text-green-700 text-xs font-bold border border-green-200 hover:bg-green-50 px-3 py-1 rounded">
+                                    Reactivate
+                                </button>
+                            )}
+                        </>
                     )}
                 </td>
               </tr>
@@ -202,6 +267,49 @@ export default function TeamPage() {
           </tbody>
         </table>
       </div>
+
+      {/* --- EDIT USER MODAL (Professional) --- */}
+      {isEditOpen && editingUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg w-[400px] shadow-2xl border border-gray-200">
+            <h3 className="text-xl font-bold mb-1 text-gray-800">Edit User</h3>
+            <p className="text-xs text-gray-500 mb-6">Updating details for {editingUser.email}</p>
+            
+            <form onSubmit={handleEditSubmit} className="space-y-5">
+              
+              {/* Name Field */}
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Full Name</label>
+                <input 
+                    type="text" 
+                    required 
+                    className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={editForm.name} 
+                    onChange={(e) => setEditForm({...editForm, name: e.target.value})} 
+                />
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">New Password</label>
+                <input 
+                    type="text" 
+                    placeholder="Leave blank to keep current password"
+                    className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+                    value={editForm.password} 
+                    onChange={(e) => setEditForm({...editForm, password: e.target.value})} 
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Only enter a value if you want to reset their password.</p>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
+                <button type="button" onClick={() => setIsEditOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded text-sm">Cancel</button>
+                <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* --- GLOBAL SETTINGS MODAL --- */}
       {isGlobalSettingsOpen && (
@@ -247,7 +355,6 @@ export default function TeamPage() {
                   <select className="border rounded px-3 py-2 text-sm" value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})}>
                     <option value="EMPLOYEE">Employee</option>
                     <option value="ADMIN">Admin</option>
-                    {/* ADDED EMPLOYER OPTION */}
                     <option value="EMPLOYER">Employer</option> 
                   </select>
                   <input type="number" placeholder="Rate ($)" className="border rounded px-3 py-2 text-sm"

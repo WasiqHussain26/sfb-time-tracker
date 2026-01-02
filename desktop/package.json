@@ -14,7 +14,7 @@
   },
   "build": {
     "appId": "com.sfbusiness.tracker",
-    "productName": "SF Time Tracker",
+    "productName": "SFB Time Tracker",
     "directories": {
       "output": "release"
     },
@@ -34,7 +34,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "SF Time Tracker"
+      "shortcutName": "SFB Time Tracker"
     }
   },
   "dependencies": {

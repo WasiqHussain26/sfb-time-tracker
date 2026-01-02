@@ -55,7 +55,7 @@ export class MailService {
             <h3 style="border-bottom: 2px solid #ddd; padding-bottom: 5px;">Last 7 Days Summary</h3>
             ${weekReport}
             
-            <p style="margin-top: 30px; font-size: 12px; color: #888;">Generated automatically by SF Time Tracker.</p>
+            <p style="margin-top: 30px; font-size: 12px; color: #888;">Generated automatically by SFB Time Tracker.</p>
           </div>
         `,
       });
@@ -86,6 +86,31 @@ export class MailService {
       console.log(`✅ Admin Report sent to ${email}`);
     } catch (error) {
       console.error(`❌ Failed to send admin report to ${email}:`, error);
+    }
+  }
+
+  async sendPasswordReset(email: string, name: string, link: string) {
+    try {
+      await this.resend.emails.send({
+        from: 'SFB Team <no-reply@sfbtimetracker.com>', // Change this to your verify domain later if needed
+        to: email,
+        subject: 'Reset Your Password',
+        html: `
+          <h1>Hi ${name},</h1>
+          <p>You requested to reset your password.</p>
+          <p>Click the link below to set a new password. This link expires in 15 minutes.</p>
+          <p>
+            <a href="${link}" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+              Reset Password
+            </a>
+          </p>
+          <p>If you didn't request this, please ignore this email.</p>
+        `,
+      });
+      console.log(`Reset email sent to ${email}`);
+    } catch (error) {
+      console.error('Error sending email:', error);
+      throw new Error('Failed to send email');
     }
   }
 }

@@ -1,26 +1,29 @@
 import { useState, useEffect } from 'react';
 import Login from './Login';
 import TrackerDashboard from './TrackerDashboard';
-import MiniWidget from './MiniWidget'; // <--- Import Widget
+import MiniWidget from './MiniWidget';
 
 function App() {
-  const [user, setUser] = useState<any>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isWidget, setIsWidget] = useState(false); // <--- New State
+  // Initialize state directly from localStorage so user stays logged in
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [user, setUser] = useState<any>(
+    localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null
+  );
+  
+  const [isWidget, setIsWidget] = useState(false);
 
   useEffect(() => {
     // Check if this window is meant to be the Mini Widget
     if (window.location.hash === '#widget') {
       setIsWidget(true);
     }
-
-    const storedUser = localStorage.getItem('user');
-    const storedToken = localStorage.getItem('token');
-    if (storedUser && storedToken) {
-      setUser(JSON.parse(storedUser));
-      setToken(storedToken);
-    }
   }, []);
+
+  const handleLoginSuccess = (newUser: any, newToken: string) => {
+    // State is updated here, LocalStorage is updated in Login.tsx
+    setUser(newUser);
+    setToken(newToken);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -34,12 +37,12 @@ function App() {
     return <MiniWidget />;
   }
 
-  // 2. SHOW LOGIN
+  // 2. SHOW LOGIN (Only if no token exists)
   if (!user || !token) {
-    return <Login onLoginSuccess={(u, t) => { setUser(u); setToken(t); }} />;
+    return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // 3. SHOW MAIN DASHBOARD
+  // 3. SHOW MAIN DASHBOARD (If logged in)
   return (
     <TrackerDashboard 
       user={user} 

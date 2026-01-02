@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service'; 
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { randomUUID } from 'crypto'; // Native Node.js crypto (No extra library needed)
+import { randomUUID } from 'crypto'; 
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -13,8 +13,7 @@ export class UsersService {
     private mailService: MailService
   ) {}
 
-  // 1. CREATE OWNER (Used by /auth/register)
-  // This was missing in your previous code, which is why Owner setup might fail
+  // 1. CREATE OWNER
   async create(createUserDto: CreateUserDto) {
     const existing = await this.prisma.user.findUnique({ 
       where: { email: createUserDto.email } 
@@ -22,7 +21,6 @@ export class UsersService {
 
     if (existing) throw new ConflictException('User already exists');
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
     return this.prisma.user.create({
@@ -31,13 +29,13 @@ export class UsersService {
         name: createUserDto.name,
         password: hashedPassword,
         role: createUserDto.role || 'EMPLOYEE',
-        status: 'ACTIVE', // Owner is active immediately
+        status: 'ACTIVE',
         autoStopLimit: 5,
       },
     });
   }
 
-  // 2. INVITE USER (Sends Real Email via Resend)
+  // 2. INVITE USER
   async invite(createUserDto: CreateUserDto) {
     const existing = await this.prisma.user.findUnique({ 
       where: { email: createUserDto.email } 
@@ -47,7 +45,6 @@ export class UsersService {
 
     const token = randomUUID(); 
 
-    // Create user with "INVITED" status
     const user = await this.prisma.user.create({
       data: {
         email: createUserDto.email,
@@ -60,12 +57,10 @@ export class UsersService {
       },
     });
 
-    // Send Email
     try {
         await this.mailService.sendInvite(user.email, user.name || 'New User', token);
     } catch (error) {
         console.error("Failed to send email:", error);
-        // We don't stop the process, but we log the error
     }
 
     return { message: 'Invitation email sent successfully', user };
@@ -107,7 +102,7 @@ export class UsersService {
     });
   }
 
-  // 5. FIND ONE (By Email) - Helper for Auth
+  // 5. FIND ONE (By Email)
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({ where: { email } });
   }
@@ -136,8 +131,17 @@ export class UsersService {
     return { message: `Updated inactivity limit to ${limit} mins for everyone.` };
   }
 
-  // Standard Helpers
+  // Helpers
   findOne(id: number) { return this.prisma.user.findUnique({ where: { id } }); }
-  update(id: number, updateUserDto: UpdateUserDto) { return this.prisma.user.update({ where: { id }, data: updateUserDto }); }
+
+  // *** IMPORTANT: UPDATED HASHING LOGIC HERE ***
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    // If password is provided, hash it first
+    if (updateUserDto.password) {
+      updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
+    }
+    return this.prisma.user.update({ where: { id }, data: updateUserDto });
+  }
+
   remove(id: number) { return this.prisma.user.delete({ where: { id } }); }
 }

@@ -16,7 +16,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setError('');
 
     try {
-      const res = await fetch('http://127.0.0.1:3000/auth/login', {
+      const res = await fetch('https://sfb-backend.vercel.app/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -25,18 +25,22 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       const data = await res.json();
 
       if (res.ok) {
-        // Double Check Status just in case
+        // Double Check Status
         if (data.user.status === 'DISABLED') {
             setError("Your account is inactive. Please contact your administrator.");
             setLoading(false);
             return;
         }
 
-        localStorage.setItem('token', data.access_token);
+        // SAVE TO STORAGE (Persistent Login)
+        // Adjust 'access_token' if your API actually sends 'accessToken'
+        const token = data.access_token || data.accessToken; 
+        
+        localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        onLoginSuccess(data.user, data.access_token);
+        
+        onLoginSuccess(data.user, token);
       } else {
-        // Handle Inactive Account Error specifically
         if (res.status === 403 || (data.message && data.message.includes('Inactive'))) {
             setError('This account has been deactivated.');
         } else {
@@ -51,18 +55,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   return (
     <div className="h-screen w-screen bg-[#f0f2f5] flex items-center justify-center p-4">
-      {/* Main Card */}
       <div className="bg-white w-full h-full max-h-[500px] shadow-lg rounded-lg flex flex-col overflow-hidden border border-gray-200">
         
-        {/* Blue Header Bar */}
+        {/* Blue Header Bar - UPDATED TEXT */}
         <div className="bg-[#2563eb] p-4 text-center shadow-sm">
           <h1 className="text-white font-bold text-lg tracking-wide">SF Business Solutions</h1>
           <p className="text-blue-100 text-xs mt-1">Time Tracker</p>
         </div>
 
-        {/* Form Container */}
         <div className="flex-1 p-6 flex flex-col justify-center gap-5">
-          
           <div className="text-center mb-2">
             <h2 className="text-gray-800 font-semibold text-lg">Welcome Back</h2>
             <p className="text-gray-400 text-xs">Please sign in to continue</p>
@@ -93,6 +94,18 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               />
             </div>
 
+            {/* FORGOT PASSWORD LINK ADDED */}
+            <div className="text-right">
+              <a 
+                href="https://sfbtimetracker.com/forgot-password" 
+                target="_blank" 
+                rel="noreferrer"
+                className="text-xs text-blue-600 hover:underline cursor-pointer"
+              >
+                Forgot Password?
+              </a>
+            </div>
+
             {error && (
               <div className="bg-red-50 text-red-600 text-xs p-2.5 rounded border border-red-100 text-center font-medium">
                 {error}
@@ -109,7 +122,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </form>
         </div>
 
-        {/* Footer */}
         <div className="bg-gray-50 p-3 text-center border-t border-gray-100">
           <p className="text-[10px] text-gray-400">Secure Client v1.0.0</p>
         </div>

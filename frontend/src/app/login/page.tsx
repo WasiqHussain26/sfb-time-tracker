@@ -1,7 +1,8 @@
-'use client'; // This tells Next.js this file handles user interaction
+'use client'; 
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -14,8 +15,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // 1. Send data to your NestJS Backend
-      const res = await fetch('https://sfb-backend.vercel.app/auth/login', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -27,12 +27,10 @@ export default function LoginPage() {
         throw new Error(data.message || 'Login failed');
       }
 
-      // 2. Save the Token (JWT) in local browser storage
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      // 3. Redirect to Dashboard (we will make this later)
-      alert('Login Successful! Token Saved.');
+      // alert('Login Successful! Token Saved.'); // Optional
       router.push('/dashboard'); 
       
     } catch (err: any) {
@@ -68,6 +66,12 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+            {/* FORGOT PASSWORD LINK */}
+            <div className="text-right mt-1">
+                <Link href="/forgot-password" className="text-xs text-blue-600 hover:underline">
+                    Forgot Password?
+                </Link>
+            </div>
           </div>
 
           <button

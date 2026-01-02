@@ -4,7 +4,7 @@ import { uploadScreenshot } from './supabase';
 const electron = window.require ? window.require('electron') : null;
 const ipcRenderer = electron ? electron.ipcRenderer : null;
 
-const API_URL = 'http://127.0.0.1:3000';
+const API_URL = 'https://sfb-backend.vercel.app';
 
 interface TrackerProps {
   user: any;
