@@ -1,0 +1,108 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. ENUMS
+enum Role {
+  ADMIN
+  EMPLOYER
+  EMPLOYEE
+}
+
+enum Status {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+// 2. MODELS
+
+model User {
+  id           Int        @id @default(autoincrement())
+  email        String     @unique
+  password     String?
+  name         String?
+  role         Role       @default(EMPLOYEE)
+  status       UserStatus @default(ACTIVE) 
+  hourlyRate   Decimal?   @default(0.0)
+  
+  // --- ADD THIS LINE ---
+  autoStopLimit Int       @default(5) // Minutes before timer auto-stops
+  
+  inviteToken  String?
+  createdAt    DateTime   @default(now())
+  
+  // Relationships
+  managedProjects Project[] @relation("ProjectManagers")
+  assignedTasks   Task[]    @relation("TaskAssignees")
+  timeSessions    TimeSession[]
+}
+
+model Project {
+  id          Int       @id @default(autoincrement())
+  name        String
+  status      Status    @default(ACTIVE)
+  
+  managers    User[]    @relation("ProjectManagers")
+  tasks       Task[]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Task {
+  id          Int       @id @default(autoincrement())
+  name        String
+  status      Status    @default(ACTIVE)
+  isOpenToAll Boolean   @default(false)
+
+  project     Project   @relation(fields: [projectId], references: [id])
+  projectId   Int
+
+  // Subtasks Logic
+  parent      Task?     @relation("SubTasks", fields: [parentId], references: [id])
+  parentId    Int?
+  subtasks    Task[]    @relation("SubTasks")
+
+  assignees   User[]    @relation("TaskAssignees")
+  
+  sessions    TimeSession[]
+}
+
+model TimeSession {
+  id          Int       @id @default(autoincrement())
+  startTime   DateTime  @default(now())
+  endTime     DateTime?
+  duration    Int?      @default(0)
+  idleDuration Int      @default(0) // If you track idle time separately
+  isManual    Boolean   @default(false)
+  
+  // --- ADD THIS LINE ---
+  notes       String?   @db.Text 
+
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id])
+  taskId      Int
+  task        Task      @relation(fields: [taskId], references: [id])
+  
+  screenshots Screenshot[]
+}
+
+model Screenshot {
+  id            Int         @id @default(autoincrement())
+  imageUrl      String
+  capturedAt    DateTime    @default(now())
+  timeSession   TimeSession @relation(fields: [timeSessionId], references: [id])
+  timeSessionId Int
+}

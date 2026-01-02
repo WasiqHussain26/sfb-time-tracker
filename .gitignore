@@ -1,0 +1,32 @@
+# --- Dependencies (Ignore in all folders) ---
+node_modules
+**/node_modules
+npm-debug.log
+yarn-error.log
+
+# --- Build Outputs (Ignore in all folders) ---
+dist
+**/dist
+build
+**/build
+out
+**/out
+.next
+**/.next
+
+# --- Environment Variables (Keep Secret) ---
+.env
+**/.env
+.env.local
+.env.production
+.env.development
+
+# --- Heavy Desktop/Executable Files (CRITICAL) ---
+*.exe
+*.dll
+*.dmg
+*.zip
+*.tar.gz
+desktop/release
+desktop/dist-electron
+frontend/public/downloads
