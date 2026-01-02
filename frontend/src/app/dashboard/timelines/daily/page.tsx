@@ -20,7 +20,7 @@ export default function DailyOverviewPage() {
     const userStr = localStorage.getItem('user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
 
-    fetch(`http://localhost:3000/reports/daily-timeline?date=${date}`)
+    fetch(`https://sfb-backend.vercel.app/reports/daily-timeline?date=${date}`)
       .then(res => res.json())
       .then(res => {
         // 2. Filter Logic: Employees only see themselves

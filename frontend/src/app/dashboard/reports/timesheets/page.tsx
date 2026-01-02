@@ -28,7 +28,7 @@ export default function TimesheetsPage() {
         } else {
             // Admin Mode: Fetch list
             try {
-                const res = await fetch('http://localhost:3000/users', {
+                const res = await fetch('https://sfb-backend.vercel.app/users', {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 const data = await res.json();
@@ -49,7 +49,7 @@ export default function TimesheetsPage() {
     if (!token) return;
 
     try {
-      const res = await fetch(`http://localhost:3000/reports/timesheet?userId=${targetUser.id}&start=${startDate}&end=${endDate}`, {
+      const res = await fetch(`https://sfb-backend.vercel.app/reports/timesheet?userId=${targetUser.id}&start=${startDate}&end=${endDate}`, {
           headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();

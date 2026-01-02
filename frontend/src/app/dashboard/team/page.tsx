@@ -29,7 +29,7 @@ export default function TeamPage() {
       
       if (!token) return;
 
-      const res = await fetch('http://localhost:3000/users', {
+      const res = await fetch('https://sfb-backend.vercel.app/users', {
          headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -58,7 +58,7 @@ export default function TeamPage() {
     const toastId = toast.loading("Updating company policy...");
 
     try {
-        const res = await fetch('http://localhost:3000/users/global-settings', {
+        const res = await fetch('https://sfb-backend.vercel.app/users/global-settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ autoStopLimit: Number(globalLimit) })
@@ -82,7 +82,7 @@ export default function TeamPage() {
     const toastId = toast.loading(`${action}ing user...`);
 
     try {
-        const res = await fetch(`http://localhost:3000/users/${userId}/status`, {
+        const res = await fetch(`https://sfb-backend.vercel.app/users/${userId}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ status: newStatus })
@@ -102,7 +102,7 @@ export default function TeamPage() {
     const token = localStorage.getItem('token');
     const toastId = toast.loading("Sending invite...");
     try {
-      const res = await fetch('http://localhost:3000/users/invite', {
+      const res = await fetch('https://sfb-backend.vercel.app/users/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(formData),

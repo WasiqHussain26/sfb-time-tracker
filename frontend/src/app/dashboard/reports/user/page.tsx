@@ -28,7 +28,7 @@ export default function UserReportPage() {
       setSelectedUser(currentUser.id.toString());
     } else {
       // Admin/Employer: Fetch All
-      fetch('http://localhost:3000/users').then(res => res.json()).then(data => {
+      fetch('https://sfb-backend.vercel.app/users').then(res => res.json()).then(data => {
         if(Array.isArray(data) && data.length > 0) {
           setUsers(data);
           setSelectedUser(data[0].id.toString());
@@ -43,7 +43,7 @@ export default function UserReportPage() {
 
     const fetchReport = async () => {
       try {
-        const res = await fetch(`http://localhost:3000/reports/user?userId=${selectedUser}&start=${startDate}&end=${endDate}`);
+        const res = await fetch(`https://sfb-backend.vercel.app/reports/user?userId=${selectedUser}&start=${startDate}&end=${endDate}`);
         const data = await res.json();
         setReportData(data);
       } catch (err) {

@@ -64,7 +64,7 @@ export default function TimelinePage() {
             setSelectedUserId(u.id);
         } else {
             try {
-                const res = await fetch('http://localhost:3000/users', { 
+                const res = await fetch('https://sfb-backend.vercel.app/users', { 
                     headers: { Authorization: `Bearer ${token}` } 
                 });
                 const data = await res.json();
@@ -93,7 +93,7 @@ export default function TimelinePage() {
     if (!token) return;
 
     try {
-        const res = await fetch(`http://localhost:3000/reports/timeline?userId=${selectedUserId}&date=${selectedDate}`, {
+        const res = await fetch(`https://sfb-backend.vercel.app/reports/timeline?userId=${selectedUserId}&date=${selectedDate}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
@@ -119,7 +119,7 @@ export default function TimelinePage() {
     const toastId = toast.loading("Deleting...");
     const token = localStorage.getItem('token');
     try {
-        const res = await fetch(`http://localhost:3000/time-tracking/${sessionId}?userId=${currentUser.id}`, {
+        const res = await fetch(`https://sfb-backend.vercel.app/time-tracking/${sessionId}?userId=${currentUser.id}`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${token}` }
         });

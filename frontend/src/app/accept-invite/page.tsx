@@ -13,7 +13,7 @@ function AcceptInviteForm() {
     e.preventDefault();
     if (!token) return alert("Invalid Token");
 
-    const res = await fetch('http://localhost:3000/users/accept-invite', {
+    const res = await fetch('https://sfb-backend.vercel.app/users/accept-invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, password }),

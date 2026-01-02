@@ -32,12 +32,12 @@ export default function ProjectsPage() {
       }
 
       // Fetch Projects
-      const resProjects = await fetch(`http://localhost:3000/projects?search=${search}`);
+      const resProjects = await fetch(`https://sfb-backend.vercel.app/projects?search=${search}`);
       const dataProjects = await resProjects.json();
       setProjects(Array.isArray(dataProjects) ? dataProjects : []);
 
       // Fetch Users (for the Manager select list)
-      const resUsers = await fetch('http://localhost:3000/users');
+      const resUsers = await fetch('https://sfb-backend.vercel.app/users');
       const dataUsers = await resUsers.json();
       setUsers(Array.isArray(dataUsers) ? dataUsers : []);
     } catch (err) {
@@ -71,8 +71,8 @@ export default function ProjectsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const url = editingProject 
-      ? `http://localhost:3000/projects/${editingProject.id}` 
-      : 'http://localhost:3000/projects';
+      ? `https://sfb-backend.vercel.app/projects/${editingProject.id}` 
+      : 'https://sfb-backend.vercel.app/projects';
     
     const method = editingProject ? 'PATCH' : 'POST';
 
@@ -101,12 +101,12 @@ export default function ProjectsPage() {
   // 5. Direct Actions (Delete & Status Change)
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to DELETE this project? This cannot be undone.')) return;
-    await fetch(`http://localhost:3000/projects/${id}`, { method: 'DELETE' });
+    await fetch(`https://sfb-backend.vercel.app/projects/${id}`, { method: 'DELETE' });
     fetchData();
   };
 
   const handleStatusChange = async (id: number, newStatus: string) => {
-    await fetch(`http://localhost:3000/projects/${id}`, {
+    await fetch(`https://sfb-backend.vercel.app/projects/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),

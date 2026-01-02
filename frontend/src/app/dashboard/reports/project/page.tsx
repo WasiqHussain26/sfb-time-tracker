@@ -17,7 +17,7 @@ export default function ProjectReportPage() {
 
   // 1. Load Projects List
   useEffect(() => {
-    fetch('http://localhost:3000/projects').then(res => res.json()).then(data => {
+    fetch('https://sfb-backend.vercel.app/projects').then(res => res.json()).then(data => {
       if(Array.isArray(data) && data.length > 0) {
         setProjects(data);
         setSelectedProject(data[0].id); // Default to first project
@@ -30,7 +30,7 @@ export default function ProjectReportPage() {
     if(!selectedProject) return;
     const fetchReport = async () => {
       try {
-        const res = await fetch(`http://localhost:3000/reports/project?projectId=${selectedProject}&start=${startDate}&end=${endDate}`);
+        const res = await fetch(`https://sfb-backend.vercel.app/reports/project?projectId=${selectedProject}&start=${startDate}&end=${endDate}`);
         const data = await res.json();
         setReportData(data);
       } catch (err) { console.error(err); }

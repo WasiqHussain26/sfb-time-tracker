@@ -30,11 +30,11 @@ export default function ProjectDetailsPage() {
         setUserRole(u.role);
       }
 
-      const resProject = await fetch(`http://localhost:3000/projects/${projectId}`);
+      const resProject = await fetch(`https://sfb-backend.vercel.app/projects/${projectId}`);
       const dataProject = await resProject.json();
       setProject(dataProject);
 
-      const resUsers = await fetch('http://localhost:3000/users');
+      const resUsers = await fetch('https://sfb-backend.vercel.app/users');
       const dataUsers = await resUsers.json();
       setUsers(Array.isArray(dataUsers) ? dataUsers : []);
     } catch (err) {
@@ -73,8 +73,8 @@ export default function ProjectDetailsPage() {
     e.preventDefault();
     try {
       const url = editingTask 
-        ? `http://localhost:3000/tasks/${editingTask.id}` // Patch URL
-        : 'http://localhost:3000/tasks';                  // Post URL
+        ? `https://sfb-backend.vercel.app/tasks/${editingTask.id}` // Patch URL
+        : 'https://sfb-backend.vercel.app/tasks';                  // Post URL
       
       const method = editingTask ? 'PATCH' : 'POST';
 
@@ -112,7 +112,7 @@ export default function ProjectDetailsPage() {
 
   // 5. Direct Action: Change Status
   const handleStatusChange = async (taskId: number, newStatus: string) => {
-    await fetch(`http://localhost:3000/tasks/${taskId}`, {
+    await fetch(`https://sfb-backend.vercel.app/tasks/${taskId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
@@ -123,7 +123,7 @@ export default function ProjectDetailsPage() {
   // 6. Direct Action: Delete Task
   const handleDelete = async (taskId: number) => {
     if (!confirm("Are you sure you want to delete this task?")) return;
-    await fetch(`http://localhost:3000/tasks/${taskId}`, { method: 'DELETE' });
+    await fetch(`https://sfb-backend.vercel.app/tasks/${taskId}`, { method: 'DELETE' });
     fetchData();
   };
 

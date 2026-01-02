@@ -22,7 +22,7 @@ export default function AuthGuard() {
         if (!userStr) return;
         const user = JSON.parse(userStr);
 
-        const res = await fetch(`http://localhost:3000/users/${user.id}`, {
+        const res = await fetch(`https://sfb-backend.vercel.app/users/${user.id}`, {
             headers: { Authorization: `Bearer ${token}` }
         });
 

@@ -15,7 +15,7 @@ export default function LoginPage() {
 
     try {
       // 1. Send data to your NestJS Backend
-      const res = await fetch('http://localhost:3000/auth/login', {
+      const res = await fetch('https://sfb-backend.vercel.app/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

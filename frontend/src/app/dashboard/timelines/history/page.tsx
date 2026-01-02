@@ -30,7 +30,7 @@ export default function EmployeeHistoryPage() {
 
       // B. Admin/Employer Logic (Fetch all)
       try {
-        const res = await fetch('http://localhost:3000/users', {
+        const res = await fetch('https://sfb-backend.vercel.app/users', {
             headers: { Authorization: `Bearer ${token}` } // <--- ADDED AUTH
         });
         
@@ -62,7 +62,7 @@ export default function EmployeeHistoryPage() {
         if (!token) return;
 
         try {
-            const res = await fetch(`http://localhost:3000/reports/employee-history?userId=${selectedUser}&start=${startDate}&end=${endDate}`, {
+            const res = await fetch(`https://sfb-backend.vercel.app/reports/employee-history?userId=${selectedUser}&start=${startDate}&end=${endDate}`, {
                 headers: { Authorization: `Bearer ${token}` } // <--- ADDED AUTH
             });
             

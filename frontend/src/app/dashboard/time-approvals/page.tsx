@@ -37,10 +37,10 @@ export default function ManualEntryPage() {
     if (u.role !== 'EMPLOYER') return;
 
     // Fetch Data
-    fetch('http://localhost:3000/users', { headers: { Authorization: `Bearer ${token}` } })
+    fetch('https://sfb-backend.vercel.app/users', { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json()).then(data => { setUsers(data); if (data.length > 0) setSelectedUserId(data[0].id); });
 
-    fetch('http://localhost:3000/projects', { headers: { Authorization: `Bearer ${token}` } })
+    fetch('https://sfb-backend.vercel.app/projects', { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json()).then(data => { setProjects(data); if (data.length > 0) setSelectedProject(data[0].id); });
   }, []);
 
@@ -48,7 +48,7 @@ export default function ManualEntryPage() {
   useEffect(() => {
     setSelectedTask(''); setTasks([]); if (!selectedProject) return;
     const token = localStorage.getItem('token');
-    fetch(`http://localhost:3000/projects/${selectedProject}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`https://sfb-backend.vercel.app/projects/${selectedProject}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json()).then(data => {
         const all = data.tasks || [];
         // Filter tasks for selected user
@@ -63,7 +63,7 @@ export default function ManualEntryPage() {
   const fetchEntries = async () => {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`http://localhost:3000/reports/timeline?userId=${selectedUserId}&date=${date}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`https://sfb-backend.vercel.app/reports/timeline?userId=${selectedUserId}&date=${date}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       setManualEntries(Array.isArray(data) ? data : []);
     } catch (err) { console.error(err); }
@@ -80,7 +80,7 @@ export default function ManualEntryPage() {
     const token = localStorage.getItem('token');
     
     try {
-      const res = await fetch('http://localhost:3000/time-tracking/manual', {
+      const res = await fetch('https://sfb-backend.vercel.app/time-tracking/manual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({

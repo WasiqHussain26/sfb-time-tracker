@@ -27,7 +27,7 @@ export default function PayrollPage() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`http://localhost:3000/reports/payroll?start=${startDate}&end=${endDate}`);
+        const res = await fetch(`https://sfb-backend.vercel.app/reports/payroll?start=${startDate}&end=${endDate}`);
         const data = await res.json();
         
         let formatted = data.map((u: any) => ({

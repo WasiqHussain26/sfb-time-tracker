@@ -91,7 +91,7 @@ export default function DashboardSummary() {
         const queryId = userRole === 'EMPLOYEE' ? `&userId=${userId}` : '';
 
         try {
-            const res = await fetch(`http://localhost:3000/reports/summary?start=${startDate}&end=${endDate}${queryId}`, {
+            const res = await fetch(`https://sfb-backend.vercel.app/reports/summary?start=${startDate}&end=${endDate}${queryId}`, {
                 headers: { Authorization: `Bearer ${token}` } // Add Auth Header
             });
             
