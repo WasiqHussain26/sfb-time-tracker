@@ -4,7 +4,6 @@ import { MailService } from '../mail/mail.service'; // <--- Import MailService
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { v4 as uuidv4 } from 'uuid'; 
-import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
