@@ -180,32 +180,34 @@ export default function UserReportPage() {
               <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">{activeTab === 'PROJECTS' ? 'Project Name' : 'Task Name'}</th>
               <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-center">Tracked Time</th>
               <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-center">Manual Time</th>
-              <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-center">Idle Time</th>
               <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-right">Total Time</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
+            {/* PROJECTS TAB */}
             {activeTab === 'PROJECTS' && reportData?.projects?.map((item, idx) => (
               <tr key={idx} className="hover:bg-gray-50">
                 <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
                 <td className="px-6 py-4 text-center font-mono text-green-600">{formatTime(item.trackedSeconds)}</td>
                 <td className="px-6 py-4 text-center font-mono text-yellow-600">{formatTime(item.manualSeconds)}</td>
-                <td className="px-6 py-4 text-center font-mono text-red-500">{formatTime(item.idleSeconds)}</td>
                 <td className="px-6 py-4 text-right font-mono text-blue-700 bg-blue-50 font-bold">{formatTime(item.totalSeconds)}</td>
               </tr>
             ))}
+            
+            {/* TASKS TAB */}
             {activeTab === 'TASKS' && reportData?.tasks?.map((item, idx) => (
               <tr key={idx} className="hover:bg-gray-50">
                 <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
                 <td className="px-6 py-4 text-center font-mono text-green-600">{formatTime(item.trackedSeconds)}</td>
                 <td className="px-6 py-4 text-center font-mono text-yellow-600">{formatTime(item.manualSeconds)}</td>
-                <td className="px-6 py-4 text-center font-mono text-red-500">{formatTime(item.idleSeconds)}</td>
                 <td className="px-6 py-4 text-right font-mono text-blue-700 bg-blue-50 font-bold">{formatTime(item.totalSeconds)}</td>
               </tr>
             ))}
+
+             {/* NO DATA STATE */}
              {((activeTab === 'PROJECTS' && (!reportData?.projects || reportData?.projects.length === 0)) || 
                (activeTab === 'TASKS' && (!reportData?.tasks || reportData?.tasks.length === 0))) && (
-               <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 italic">No data found for this time period.</td></tr>
+               <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 italic">No data found for this time period.</td></tr>
              )}
           </tbody>
         </table>
