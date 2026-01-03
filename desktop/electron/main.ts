@@ -1,6 +1,7 @@
 import { app, BrowserWindow, powerMonitor, ipcMain, desktopCapturer, shell, dialog } from 'electron';
 import path from 'path';
-import { autoUpdater } from 'electron-updater'; // <--- IMPORT THIS
+import fs from 'fs'; // <--- ADDED fs
+import { autoUpdater } from 'electron-updater'; 
 
 // Define paths for build vs dev
 process.env.DIST = path.join(__dirname, '../dist');
@@ -51,7 +52,7 @@ function createWindows() {
     show: false, 
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false,
+      contextIsolation: false, 
     },
   });
 
@@ -101,6 +102,37 @@ function createWindows() {
     });
   });
 }
+
+// --- SESSION MANAGEMENT (FIX FOR PERSISTENCE) ---
+const SESSION_FILE = path.join(app.getPath('userData'), 'session.json');
+
+ipcMain.on('save-session', (_event, data) => {
+  try {
+    fs.writeFileSync(SESSION_FILE, JSON.stringify(data));
+    console.log("Details saved to:", SESSION_FILE);
+  } catch (e) {
+    console.error("Failed to save session:", e);
+  }
+});
+
+ipcMain.handle('get-session', () => {
+  try {
+    if (fs.existsSync(SESSION_FILE)) {
+      return JSON.parse(fs.readFileSync(SESSION_FILE, 'utf-8'));
+    }
+  } catch (e) {
+    console.error("Failed to load session:", e);
+  }
+  return null;
+});
+
+ipcMain.on('clear-session', () => {
+    try {
+        if (fs.existsSync(SESSION_FILE)) fs.unlinkSync(SESSION_FILE);
+    } catch (e) {
+        console.error("Failed to clear session:", e);
+    }
+});
 
 // --- IPC EVENTS ---
 ipcMain.on('update-widget', (_event, data) => {

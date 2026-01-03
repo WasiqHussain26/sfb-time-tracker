@@ -1,9 +1,15 @@
 {
   "name": "sfb-time-tracker",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.5",
   "description": "SF Business Solutions Time Tracker",
   "author": "SF Business Solutions",
+  
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WasiqHussain26/sfb-time-tracker.git"
+  },
+
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -33,7 +39,7 @@
     "win": {
       "target": "nsis",
       "icon": "c/logo.png",
-      "artifactName": "${productName} Setup ${version}.${ext}",
+      "artifactName": "${productName} Setup.${ext}",
       "publish": ["github"]
     },
     "nsis": {

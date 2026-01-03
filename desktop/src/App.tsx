@@ -4,50 +4,86 @@ import TrackerDashboard from './TrackerDashboard';
 import MiniWidget from './MiniWidget';
 
 function App() {
-  // Initialize state directly from localStorage so user stays logged in
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-  const [user, setUser] = useState<any>(
-    localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')!) : null
-  );
-  
+  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [isWidget, setIsWidget] = useState(false);
 
+  // --- 1. INITIAL LOAD ---
   useEffect(() => {
-    // Check if this window is meant to be the Mini Widget
+    // Check if we are running as widget
     if (window.location.hash === '#widget') {
       setIsWidget(true);
     }
+
+    // Load Session from Main Process (Disk)
+    const loadSession = async () => {
+      if (window.require) {
+        try {
+          const { ipcRenderer } = window.require('electron');
+          const session = await ipcRenderer.invoke('get-session');
+          console.log("📥 Loaded Session from Main:", session);
+
+          if (session && session.token && session.user) {
+            setToken(session.token);
+            setUser(session.user);
+          }
+        } catch (err) {
+          console.error("Failed to load session from main:", err);
+        }
+      }
+      setLoading(false);
+    };
+
+    loadSession();
   }, []);
 
+  // --- 2. LOGIN HANDLER ---
   const handleLoginSuccess = (newUser: any, newToken: string) => {
-    // State is updated here, LocalStorage is updated in Login.tsx
     setUser(newUser);
     setToken(newToken);
+
+    // Save to Main Process (Persist to Disk)
+    if (window.require) {
+      const { ipcRenderer } = window.require('electron');
+      ipcRenderer.send('save-session', { user: newUser, token: newToken });
+      console.log("📤 Sent Login to Main Process");
+    }
   };
 
+  // --- 3. LOGOUT HANDLER ---
   const handleLogout = () => {
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
+    console.log("⚠️ Logging out...");
     setUser(null);
     setToken(null);
+
+    // Clear from Main Process
+    if (window.require) {
+      const { ipcRenderer } = window.require('electron');
+      ipcRenderer.send('clear-session');
+    }
   };
 
-  // 1. SHOW MINI WIDGET
-  if (isWidget) {
-    return <MiniWidget />;
+  // --- RENDER ---
+  if (isWidget) return <MiniWidget />;
+
+  if (loading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-gray-50 text-gray-500 text-xs">
+        Loading session...
+      </div>
+    );
   }
 
-  // 2. SHOW LOGIN (Only if no token exists)
   if (!user || !token) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // 3. SHOW MAIN DASHBOARD (If logged in)
   return (
-    <TrackerDashboard 
-      user={user} 
-      token={token} 
-      onLogout={handleLogout} 
+    <TrackerDashboard
+      user={user}
+      token={token}
+      onLogout={handleLogout}
     />
   );
 }

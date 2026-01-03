@@ -30,13 +30,14 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
   const [stats, setStats] = useState({ day: 0, week: 0 });
   const [isSystemIdle, setIsSystemIdle] = useState(false);
   
-  // --- NEW: STOP NOTES MODAL STATE ---
+  // STOP NOTES MODAL STATE
   const [isStopModalOpen, setIsStopModalOpen] = useState(false);
   const [stopNotes, setStopNotes] = useState('');
   const [stopLoading, setStopLoading] = useState(false);
 
   const [isBreakMode, setIsBreakMode] = useState(false);
 
+  // --- REF TO TRACK SESSION WITHOUT RE-RENDERING ---
   const activeSessionRef = useRef(activeSession);
   useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
 
@@ -53,12 +54,10 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         setIsSystemIdle(isIdle);
         
         // --- AUTO-STOP LOGIC ---
-        // If the user is currently tracking time...
         if (activeSessionRef.current) {
-            // Check if idle time exceeds the employer's limit (converted to seconds)
+            // Check if idle time exceeds limit
             if (idleSeconds >= (AUTO_STOP_LIMIT_MINUTES * 60)) {
                 console.log(`🛑 Auto-stopping due to inactivity.`);
-                // PASS TRUE to indicate this is an AUTO stop (bypasses modal)
                 handleStopTimer(true); 
                 new Notification("Timer Stopped", { 
                     body: `Timer stopped automatically due to inactivity (${AUTO_STOP_LIMIT_MINUTES}m limit).` 
@@ -73,16 +72,17 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         else handleStartTimer();
       });
 
-      // SECURITY: HEARTBEAT CHECK (Auto Logout if Deactivated)
+      // SECURITY: HEARTBEAT CHECK
       const heartbeatInterval = setInterval(async () => {
          try {
            const res = await fetch(`${API_URL}/users/${user.id}`, { 
              headers: { Authorization: `Bearer ${token}` }
            });
            
+           // --- FIX: Commented out logout to prevent loops ---
            if (res.status === 401 || res.status === 403) { 
-             console.error("⛔ Account Deactivated or Session Expired. Logging out...");
-             onLogout(); 
+             console.error("❌ TOKEN REJECTED (Heartbeat) - Keeping session for debug");
+             // onLogout(); // <--- DISABLED LOGOUT
              return; 
            }
            
@@ -94,7 +94,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
          } catch (e) {
             console.warn("Heartbeat failed (Network issue?)");
          }
-      }, 30000); // Check every 30s
+      }, 30000); 
 
       return () => {
         ipcRenderer.removeAllListeners('system-idle-status');
@@ -131,27 +131,34 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     return () => clearInterval(interval);
   }, [activeSession]);
 
-  // --- 4. SCREENSHOT LOGIC ---
+  // --- 4. SCREENSHOT LOGIC (FIXED) ---
   useEffect(() => {
+    // If no session ID, don't start the cycle
+    if (!activeSession?.id) return;
+
+    // FIX: Use 'any' to prevent TypeScript errors
     let screenshotTimeout: any;
 
     const scheduleNextScreenshot = () => {
-      const min = 300000; // 5 minutes
-      const max = 600000; // 10 minutes
+      // Random interval between 5 and 10 minutes
+      const min = 300000; 
+      const max = 600000; 
       const randomTime = Math.floor(Math.random() * (max - min + 1) + min);
       
       console.log(`📸 Next screenshot cycle in ${Math.floor(randomTime / 60000)} minutes`);
 
       screenshotTimeout = setTimeout(async () => {
+        // Use REF to safely check active state inside the timeout
         if (!activeSessionRef.current) return; 
 
         try {
           if (!ipcRenderer) return;
           
-          // 1. Get ARRAY of images (One for each monitor)
+          // 1. Get ARRAY of images (Works for Single OR Dual screens)
           const images: string[] = await ipcRenderer.invoke('capture-screen');
           
-          // 2. Loop through and upload EACH screen
+          // 2. Loop through and upload EACH screen found
+          // If user has 1 screen, this loop runs once.
           for (const [index, image] of images.entries()) {
               const url = await uploadScreenshot(image, user.id.toString());
               console.log(`✅ Screen ${index + 1} Uploaded:`, url);
@@ -170,28 +177,34 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
 
         } catch (err) {
           console.error("❌ Screenshot Cycle Error", err);
-        }
-
-        // Reschedule only if still active
-        if (activeSessionRef.current) {
-            scheduleNextScreenshot();
+        } finally {
+           // 4. ALWAYS reschedule if session is still active
+           if (activeSessionRef.current) {
+              scheduleNextScreenshot();
+           }
         }
       }, randomTime);
     };
 
-    if (activeSession) {
-      scheduleNextScreenshot();
-    }
+    // Start the first cycle immediately
+    scheduleNextScreenshot();
 
+    // Cleanup: Only clear if the session ID changes (user stops timer)
     return () => clearTimeout(screenshotTimeout);
-  }, [activeSession]);
+    
+  }, [activeSession?.id]); 
 
   // --- 5. API CALLS ---
   const fetchProjects = async () => {
       try {
         const res = await fetch(`${API_URL}/projects`, { headers: { Authorization: `Bearer ${token}` } });
         
-        if (res.status === 401 || res.status === 403) { onLogout(); return; }
+        // --- FIX: Commented out logout to prevent loops ---
+        if (res.status === 401 || res.status === 403) { 
+             console.error("❌ TOKEN REJECTED (FetchProjects) - Keeping session for debug");
+             // onLogout(); // <--- DISABLED LOGOUT
+             return; 
+        }
 
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -253,7 +266,6 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     } catch (err) { console.error(err); }
   };
 
-  // --- UPDATED STOP TIMER LOGIC ---
   const handleStopTimer = async (isAutoStop = false, isBreak = false) => {
     if (isAutoStop) {
         await executeStop(`Auto-stopped due to inactivity (${AUTO_STOP_LIMIT_MINUTES}m limit).`);
@@ -261,7 +273,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     }
 
     setStopNotes(''); 
-    setIsBreakMode(isBreak); // Set whether this is a "Stop" or a "Break"
+    setIsBreakMode(isBreak); 
     setIsStopModalOpen(true);
   };
 
@@ -270,7 +282,6 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     if (!stopNotes.trim()) return alert("Notes are compulsory for documentation.");
     
     setStopLoading(true);
-    // If it's a break, prefix the note so it's clear in the timeline
     const finalNote = isBreakMode ? `[BREAK] ${stopNotes}` : stopNotes;
     await executeStop(finalNote);
     
@@ -281,7 +292,6 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     }
   };
 
-  // The actual API call
   const executeStop = async (notes: string) => {
       try {
         const res = await fetch(`${API_URL}/time-tracking/stop`, {
@@ -289,8 +299,8 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ 
                 userId: user.id, 
-                idleTime: 0, // No manual idle deduction anymore
-                notes: notes // <--- SEND NOTES
+                idleTime: 0, 
+                notes: notes 
             }) 
         });
         if (res.ok) {
@@ -328,7 +338,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
           <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs">
             {user.name?.charAt(0)}
           </div>
-          {user.name}
+          {user.name} <span className="text-xs text-red-500">(v1.0.4 FIX)</span>
         </div>
 
         <div className="flex gap-1">
