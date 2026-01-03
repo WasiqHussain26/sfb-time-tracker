@@ -20,6 +20,14 @@ export default function MiniWidget() {
   }, []);
 
   const handleToggle = () => { if (ipcRenderer) ipcRenderer.send('widget-toggle-timer'); };
+  const handleBreak = () => { 
+    if (ipcRenderer) {
+        // We tell main window to expand and show the break modal
+        ipcRenderer.send('expand-main-window');
+        // Small delay to ensure window is visible before triggering event
+        setTimeout(() => ipcRenderer.send('trigger-timer-toggle'), 100); 
+    }
+  };
   const handleExpand = () => { if (ipcRenderer) ipcRenderer.send('expand-main-window'); };
   const handleHide = () => { if (ipcRenderer) ipcRenderer.send('hide-widget'); };
 
@@ -35,28 +43,33 @@ export default function MiniWidget() {
       </div>
 
       <div className="flex-1 px-4 flex flex-col justify-center overflow-hidden">
-         <div className="flex items-center gap-2">
-            <span className={`text-xs font-bold uppercase ${isRunning ? 'text-green-600' : 'text-red-500'}`}>
-              {isRunning ? 'Active' : 'On Break'}
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-bold uppercase ${isRunning ? 'text-green-600' : 'text-gray-500'}`}>
+              {isRunning ? 'Tracking' : 'Stopped'}
             </span>
-         </div>
-         <div 
-            className="text-sm font-semibold text-gray-800 truncate cursor-pointer hover:underline decoration-blue-500"
-            onClick={handleExpand}
-            title={taskName}
-         >
+          </div>
+          <div className="text-sm font-semibold text-gray-800 truncate cursor-pointer" onClick={handleExpand}>
             {taskName}
-         </div>
+          </div>
       </div>
 
       <div className="font-mono font-bold text-gray-900 text-lg mr-4">
         {time}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
+        {isRunning && (
+            <button 
+                onClick={handleBreak}
+                className="p-2 bg-orange-500 hover:bg-orange-600 text-white rounded-full transition shadow-sm"
+                title="Take a Break"
+            >
+                ☕
+            </button>
+        )}
         <button 
           onClick={handleToggle}
-          className={`px-4 py-1.5 rounded text-white font-bold text-xs shadow transition ${isRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
+          className={`px-3 py-1.5 rounded text-white font-bold text-xs shadow transition ${isRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
         >
           {isRunning ? 'Stop' : 'Start'}
         </button>

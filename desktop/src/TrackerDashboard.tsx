@@ -35,6 +35,8 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
   const [stopNotes, setStopNotes] = useState('');
   const [stopLoading, setStopLoading] = useState(false);
 
+  const [isBreakMode, setIsBreakMode] = useState(false);
+
   const activeSessionRef = useRef(activeSession);
   useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
 
@@ -245,27 +247,31 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
   };
 
   // --- UPDATED STOP TIMER LOGIC ---
-  const handleStopTimer = async (isAutoStop = false) => {
-    // 1. If it's Auto-Stop, proceed immediately with a system note
+  const handleStopTimer = async (isAutoStop = false, isBreak = false) => {
     if (isAutoStop) {
         await executeStop(`Auto-stopped due to inactivity (${AUTO_STOP_LIMIT_MINUTES}m limit).`);
         return;
     }
 
-    // 2. If Manual Stop, OPEN MODAL
-    setStopNotes(''); // Clear previous notes
+    setStopNotes(''); 
+    setIsBreakMode(isBreak); // Set whether this is a "Stop" or a "Break"
     setIsStopModalOpen(true);
   };
 
-  // Called when user submits the modal
   const handleConfirmManualStop = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stopNotes.trim()) return alert("Notes are compulsory.");
+    if (!stopNotes.trim()) return alert("Notes are compulsory for documentation.");
     
     setStopLoading(true);
-    await executeStop(stopNotes);
+    // If it's a break, prefix the note so it's clear in the timeline
+    const finalNote = isBreakMode ? `[BREAK] ${stopNotes}` : stopNotes;
+    await executeStop(finalNote);
+    
     setStopLoading(false);
     setIsStopModalOpen(false);
+    if (isBreakMode) {
+        new Notification("Break Started", { body: "Your session has been saved and timer paused." });
+    }
   };
 
   // The actual API call
@@ -343,9 +349,20 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
             ▶ START TIMER
           </button>
         ) : (
-          <button onClick={() => handleStopTimer(false)} className="w-full bg-[#ef4444] hover:bg-[#dc2626] text-white font-bold text-lg py-3 rounded shadow transition transform active:scale-[0.99] flex justify-center items-center gap-2">
-             STOP TIMER ({formatTimerBig(elapsed)})
-          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => handleStopTimer(false, true)} 
+              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded shadow transition flex justify-center items-center gap-2"
+            >
+              ☕ BREAK
+            </button>
+            <button 
+              onClick={() => handleStopTimer(false, false)} 
+              className="flex-1 bg-[#ef4444] hover:bg-[#dc2626] text-white font-bold py-3 rounded shadow transition flex justify-center items-center gap-2"
+            >
+              STOP
+            </button>
+          </div>
         )}
 
         <div className="grid grid-cols-2 divide-x divide-gray-300 text-center py-2 bg-gray-50 border border-gray-200 rounded">
@@ -390,12 +407,14 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
       {isStopModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
             <div className="bg-white p-5 rounded-lg w-[90%] max-w-sm shadow-2xl">
-                <h3 className="text-lg font-bold text-gray-800 mb-2">Stop Session</h3>
-                <p className="text-xs text-gray-500 mb-3">Please describe what you worked on.</p>
+                <h3 className="text-lg font-bold text-gray-800 mb-2">{isBreakMode ? 'Take a Break' : 'Stop Session'}</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  {isBreakMode ? 'Notes are compulsory to start a break.' : 'Please describe what you worked on.'}
+                </p>
                 <form onSubmit={handleConfirmManualStop}>
                     <textarea 
                         className="w-full border border-gray-300 rounded p-2 text-sm focus:border-blue-500 outline-none h-24 resize-none bg-white text-gray-800"
-                        placeholder="e.g. Fixed navigation bug..."
+                        placeholder={isBreakMode ? "e.g. Washroom, Phone call, Tea break..." : "e.g. Fixed navigation bug..."}
                         value={stopNotes}
                         onChange={(e) => setStopNotes(e.target.value)}
                         required
@@ -403,8 +422,8 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
                     />
                     <div className="flex gap-2 mt-4 justify-end">
                         <button type="button" onClick={() => setIsStopModalOpen(false)} className="px-3 py-2 text-gray-500 hover:bg-gray-100 rounded text-xs font-bold">CANCEL</button>
-                        <button type="submit" disabled={stopLoading} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold">
-                            {stopLoading ? 'SAVING...' : 'STOP TIMER'}
+                        <button type="submit" disabled={stopLoading} className={`px-4 py-2 rounded text-white text-xs font-bold ${isBreakMode ? 'bg-orange-600 hover:bg-orange-700' : 'bg-red-600 hover:bg-red-700'}`}>
+                            {stopLoading ? 'SAVING...' : (isBreakMode ? 'START BREAK' : 'STOP TIMER')}
                         </button>
                     </div>
                 </form>
