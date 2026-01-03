@@ -4,6 +4,7 @@ import {
   format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, 
   addMonths, addWeeks, addDays
 } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 type ViewMode = 'CUSTOM' | 'MONTH' | 'MON-FRI' | 'SAT-SUN';
 type Tab = 'EMPLOYEE' | 'PROJECT' | 'TASK';
@@ -18,7 +19,7 @@ export default function DashboardSummary() {
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
 
-  // DATA STATE - initialized with safe defaults
+  // DATA STATE
   const [summaryData, setSummaryData] = useState<{ employees: any[], projects: any[], tasks: any[] }>({ 
     employees: [], 
     projects: [], 
@@ -30,10 +31,19 @@ export default function DashboardSummary() {
   const [userId, setUserId] = useState('');
   const [isUserLoaded, setIsUserLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  const router = useRouter();
 
-  // --- INIT USER ---
+  // --- 1. INIT USER ---
   useEffect(() => {
     const userStr = localStorage.getItem('user');
+    const token = localStorage.getItem('token');
+    
+    if (!token || !userStr) {
+       router.push('/login');
+       return;
+    }
+
     if (userStr) {
       const u = JSON.parse(userStr);
       setUserRole(u.role);
@@ -42,7 +52,7 @@ export default function DashboardSummary() {
     setIsUserLoaded(true);
   }, []);
 
-  // --- DATE LOGIC ---
+  // --- 2. DATE LOGIC ---
   useEffect(() => {
     let s = new Date();
     let e = new Date();
@@ -64,7 +74,7 @@ export default function DashboardSummary() {
     setEndDate(format(e, 'yyyy-MM-dd'));
   }, [viewMode, currentDate]);
 
-  // --- NAVIGATION HANDLERS ---
+  // --- 3. NAVIGATION HANDLERS ---
   const handleNavigate = (direction: 'PREV' | 'NEXT') => {
     if (viewMode === 'CUSTOM') return;
     const modifier = direction === 'NEXT' ? 1 : -1;
@@ -78,40 +88,43 @@ export default function DashboardSummary() {
     setCurrentDate(newDate);
   };
 
-  // --- FETCH DATA ---
+  // --- 4. FETCH DATA ---
   useEffect(() => {
     if (!startDate || !endDate || !isUserLoaded) return;
-
+    
     // Safety: If employee but no ID, wait
     if (userRole === 'EMPLOYEE' && !userId) return;
 
     const fetchData = async () => {
         setIsLoading(true);
-        const token = localStorage.getItem('token'); // Get Token
+        const token = localStorage.getItem('token'); 
         const queryId = userRole === 'EMPLOYEE' ? `&userId=${userId}` : '';
 
         try {
-            const res = await fetch(`https://sfb-backend.vercel.app/reports/summary?start=${startDate}&end=${endDate}${queryId}`, {
-                headers: { Authorization: `Bearer ${token}` } // Add Auth Header
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/summary?start=${startDate}&end=${endDate}${queryId}`, {
+                headers: { Authorization: `Bearer ${token}` }
             });
             
+            if (res.status === 401) {
+                 router.push('/login');
+                 return;
+            }
+
             if (res.ok) {
                 const data = await res.json();
-                // SAFE SETTER: Ensure arrays exist
                 setSummaryData({
                     employees: Array.isArray(data.employees) ? data.employees : [],
                     projects: Array.isArray(data.projects) ? data.projects : [],
                     tasks: Array.isArray(data.tasks) ? data.tasks : []
                 });
             } else {
-                // If error (e.g. 401), set empty to avoid crash
                 setSummaryData({ employees: [], projects: [], tasks: [] });
             }
         } catch (e) {
             console.error(e);
             setSummaryData({ employees: [], projects: [], tasks: [] });
         } finally {
-            setIsLoading(false);
+            setIsLoading(false); // <--- CRITICAL: Prevents "Faded" overlay stuck state
         }
     };
 
@@ -162,7 +175,7 @@ export default function DashboardSummary() {
       {/* TABLE */}
       <div className="bg-white rounded shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
-            <div className="p-12 text-center text-gray-500 font-medium">Loading summary data...</div>
+            <div className="p-12 text-center text-gray-500 font-medium animate-pulse">Loading summary data...</div>
         ) : (
             <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -176,7 +189,6 @@ export default function DashboardSummary() {
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                {/* SAFE MAPPING: Check array existence before mapping */}
                 {activeTab === 'EMPLOYEE' && summaryData.employees?.map(emp => (
                     <tr key={emp.id} className="hover:bg-gray-50 transition">
                     <td className="p-4 font-semibold text-gray-800 flex items-center gap-2">

@@ -136,11 +136,11 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     let screenshotTimeout: any;
 
     const scheduleNextScreenshot = () => {
-      const min = 300000; 
-      const max = 600000;
+      const min = 300000; // 5 minutes
+      const max = 600000; // 10 minutes
       const randomTime = Math.floor(Math.random() * (max - min + 1) + min);
       
-      console.log(`📸 Next screenshot in ${Math.floor(randomTime / 60000)} minutes`);
+      console.log(`📸 Next screenshot cycle in ${Math.floor(randomTime / 60000)} minutes`);
 
       screenshotTimeout = setTimeout(async () => {
         if (!activeSessionRef.current) return; 
@@ -148,24 +148,31 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         try {
           if (!ipcRenderer) return;
           
-          const image = await ipcRenderer.invoke('capture-screen');
-          const url = await uploadScreenshot(image, user.id.toString());
-          console.log("✅ Screenshot Uploaded:", url);
+          // 1. Get ARRAY of images (One for each monitor)
+          const images: string[] = await ipcRenderer.invoke('capture-screen');
+          
+          // 2. Loop through and upload EACH screen
+          for (const [index, image] of images.entries()) {
+              const url = await uploadScreenshot(image, user.id.toString());
+              console.log(`✅ Screen ${index + 1} Uploaded:`, url);
 
-          await fetch(`${API_URL}/reports/screenshot`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              timeSessionId: activeSessionRef.current.id,
-              imageUrl: url,
-              capturedAt: new Date()
-            })
-          });
+              // 3. Save to Backend
+              await fetch(`${API_URL}/reports/screenshot`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                  timeSessionId: activeSessionRef.current.id,
+                  imageUrl: url,
+                  capturedAt: new Date()
+                })
+              });
+          }
 
         } catch (err) {
-          console.error("❌ Screenshot Error", err);
+          console.error("❌ Screenshot Cycle Error", err);
         }
 
+        // Reschedule only if still active
         if (activeSessionRef.current) {
             scheduleNextScreenshot();
         }

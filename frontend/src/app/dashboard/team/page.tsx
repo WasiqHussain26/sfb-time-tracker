@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import AuthGuard from '@/components/AuthGuard'; // <--- Import Guard
 
-export default function TeamPage() {
+function TeamPageContent() {
   const [users, setUsers] = useState<any[]>([]);
   
   // --- MODAL STATES ---
@@ -60,11 +61,11 @@ export default function TeamPage() {
   // 1. OPEN EDIT MODAL
   const openEditModal = (user: any) => {
     setEditingUser(user);
-    setEditForm({ name: user.name, password: '' }); // Password empty by default
+    setEditForm({ name: user.name, password: '' });
     setIsEditOpen(true);
   };
 
-  // 2. SUBMIT EDIT (Name Change + Optional Password Reset)
+  // 2. SUBMIT EDIT
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
@@ -72,7 +73,6 @@ export default function TeamPage() {
     const token = localStorage.getItem('token');
     const toastId = toast.loading("Updating user...");
 
-    // Construct Payload (only send password if typed)
     const payload: any = { name: editForm.name };
     if (editForm.password.trim() !== '') {
         payload.password = editForm.password;
@@ -91,7 +91,7 @@ export default function TeamPage() {
         if (res.ok) {
             toast.success("User updated successfully!", { id: toastId });
             setIsEditOpen(false);
-            fetchUsers(); // Refresh list
+            fetchUsers();
         } else {
             toast.error("Failed to update user", { id: toastId });
         }
@@ -186,10 +186,10 @@ export default function TeamPage() {
         {canManage && (
           <div className="flex gap-2">
             <button onClick={() => setIsGlobalSettingsOpen(true)} className="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-700 font-medium text-sm flex items-center gap-2">
-               ⚙️ Global Settings
+                ⚙️ Global Settings
             </button>
             <button onClick={() => setIsInviteOpen(true)} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium text-sm">
-               + Invite User
+                + Invite User
             </button>
           </div>
         )}
@@ -240,7 +240,7 @@ export default function TeamPage() {
                 <td className="px-6 py-4 text-right flex justify-end gap-2 items-center h-full mt-3">
                     {canManage && user.role !== 'EMPLOYER' && (
                         <>
-                            {/* EDIT BUTTON (Name & Password) */}
+                            {/* EDIT BUTTON */}
                             <button 
                                 onClick={() => openEditModal(user)}
                                 className="text-blue-600 hover:text-blue-900 text-xs font-medium border border-blue-200 px-3 py-1 rounded hover:bg-blue-50 mr-2"
@@ -268,7 +268,7 @@ export default function TeamPage() {
         </table>
       </div>
 
-      {/* --- EDIT USER MODAL (Professional) --- */}
+      {/* --- EDIT USER MODAL --- */}
       {isEditOpen && editingUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg w-[400px] shadow-2xl border border-gray-200">
@@ -371,4 +371,13 @@ export default function TeamPage() {
       )}
     </div>
   );
+}
+
+// WRAP WITH AUTHGUARD
+export default function TeamPage() {
+    return (
+        <AuthGuard allowedRoles={['EMPLOYER', 'ADMIN']}>
+            <TeamPageContent />
+        </AuthGuard>
+    );
 }

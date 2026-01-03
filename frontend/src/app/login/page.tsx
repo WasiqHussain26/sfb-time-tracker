@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
+import { useEffect } from 'react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -42,6 +43,14 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      // If user is already logged in, kick them back to dashboard
+      router.push('/dashboard'); 
+    }
+  }, []);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f3f4f6]">
