@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, startOfWeek, addDays, addMonths, subMonths } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 export default function UserReportPage() {
   // --- STATE ---
@@ -16,10 +17,18 @@ export default function UserReportPage() {
   const [activeTab, setActiveTab] = useState<'PROJECTS' | 'TASKS'>('PROJECTS');
   const [reportData, setReportData] = useState<{projects: any[], tasks: any[]} | null>(null);
 
+  const router = useRouter();
+
   // --- INITIAL LOAD (User Permissions) ---
   useEffect(() => {
     const userStr = localStorage.getItem('user');
-    if (!userStr) return;
+    const token = localStorage.getItem('token');
+
+    if (!userStr || !token) {
+        router.push('/login');
+        return;
+    }
+
     const currentUser = JSON.parse(userStr);
 
     if (currentUser.role === 'EMPLOYEE') {
@@ -27,23 +36,38 @@ export default function UserReportPage() {
       setUsers([currentUser]);
       setSelectedUser(currentUser.id.toString());
     } else {
-      // Admin/Employer: Fetch All
-      fetch('https://sfb-backend.vercel.app/users').then(res => res.json()).then(data => {
+      // Admin/Employer: Fetch All (WITH TOKEN)
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      .then(res => {
+        if (res.status === 401) { router.push('/login'); return []; }
+        return res.json();
+      })
+      .then(data => {
         if(Array.isArray(data) && data.length > 0) {
           setUsers(data);
           setSelectedUser(data[0].id.toString());
         }
-      });
+      })
+      .catch(console.error);
     }
   }, []);
 
   // --- FETCH REPORT DATA ---
   useEffect(() => {
     if(!selectedUser) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
 
     const fetchReport = async () => {
       try {
-        const res = await fetch(`https://sfb-backend.vercel.app/reports/user?userId=${selectedUser}&start=${startDate}&end=${endDate}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/user?userId=${selectedUser}&start=${startDate}&end=${endDate}`, {
+             headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (res.status === 401) return;
+
         const data = await res.json();
         setReportData(data);
       } catch (err) {
@@ -161,7 +185,7 @@ export default function UserReportPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {activeTab === 'PROJECTS' && reportData?.projects.map((item, idx) => (
+            {activeTab === 'PROJECTS' && reportData?.projects?.map((item, idx) => (
               <tr key={idx} className="hover:bg-gray-50">
                 <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
                 <td className="px-6 py-4 text-center font-mono text-green-600">{formatTime(item.trackedSeconds)}</td>
@@ -170,7 +194,7 @@ export default function UserReportPage() {
                 <td className="px-6 py-4 text-right font-mono text-blue-700 bg-blue-50 font-bold">{formatTime(item.totalSeconds)}</td>
               </tr>
             ))}
-            {activeTab === 'TASKS' && reportData?.tasks.map((item, idx) => (
+            {activeTab === 'TASKS' && reportData?.tasks?.map((item, idx) => (
               <tr key={idx} className="hover:bg-gray-50">
                 <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
                 <td className="px-6 py-4 text-center font-mono text-green-600">{formatTime(item.trackedSeconds)}</td>
@@ -179,8 +203,8 @@ export default function UserReportPage() {
                 <td className="px-6 py-4 text-right font-mono text-blue-700 bg-blue-50 font-bold">{formatTime(item.totalSeconds)}</td>
               </tr>
             ))}
-             {((activeTab === 'PROJECTS' && reportData?.projects.length === 0) || 
-               (activeTab === 'TASKS' && reportData?.tasks.length === 0)) && (
+             {((activeTab === 'PROJECTS' && (!reportData?.projects || reportData?.projects.length === 0)) || 
+               (activeTab === 'TASKS' && (!reportData?.tasks || reportData?.tasks.length === 0))) && (
                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400 italic">No data found for this time period.</td></tr>
              )}
           </tbody>

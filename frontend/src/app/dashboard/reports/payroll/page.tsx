@@ -1,12 +1,15 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, startOfWeek, addDays, addMonths, subMonths } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 export default function PayrollPage() {
   // State
   const [payrollData, setPayrollData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  
+  const router = useRouter();
 
   // Filters
   const [filterType, setFilterType] = useState<'CUSTOM' | 'MONTH' | 'WEEK_MF' | 'WEEK_SS'>('CUSTOM');
@@ -25,10 +28,29 @@ export default function PayrollPage() {
   // 2. Fetch Data
   useEffect(() => {
     const fetchData = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) { router.push('/login'); return; } // Redirect if no token
+
       setLoading(true);
       try {
-        const res = await fetch(`https://sfb-backend.vercel.app/reports/payroll?start=${startDate}&end=${endDate}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/payroll?start=${startDate}&end=${endDate}`, {
+             headers: { Authorization: `Bearer ${token}` } // <--- ADDED HEADER
+        });
+
+        if (res.status === 401) {
+            router.push('/login');
+            return;
+        }
+
         const data = await res.json();
+        
+        // SAFETY CHECK: Ensure data is an array
+        if (!Array.isArray(data)) {
+            console.error("API Error:", data);
+            setPayrollData([]);
+            setLoading(false);
+            return;
+        }
         
         let formatted = data.map((u: any) => ({
           ...u,
@@ -41,7 +63,7 @@ export default function PayrollPage() {
         }
         
         setPayrollData(formatted);
-      } catch (err) { console.error(err); }
+      } catch (err) { console.error(err); setPayrollData([]); }
       setLoading(false);
     };
 
@@ -151,7 +173,6 @@ export default function PayrollPage() {
         <table className="w-full text-left">
           <thead className="bg-gray-50 border-b">
             <tr>
-              {/* FIXED: Removed the comment that was causing the whitespace error */}
               <th className="px-6 py-4 font-semibold text-gray-700 text-sm">Name</th>
               <th className="px-6 py-4 font-semibold text-gray-700 text-sm">Role</th>
               <th className="px-6 py-4 font-semibold text-gray-700 text-sm">Total Time</th>

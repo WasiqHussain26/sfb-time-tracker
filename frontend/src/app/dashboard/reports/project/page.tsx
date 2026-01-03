@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { format, startOfMonth, endOfMonth, addMonths, subMonths, startOfWeek, addDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, addDays } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 export default function ProjectReportPage() {
   const [projects, setProjects] = useState<any[]>([]);
@@ -11,34 +12,65 @@ export default function ProjectReportPage() {
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   
-  // Data & Tabs
   const [activeTab, setActiveTab] = useState<'TASKS' | 'USERS'>('TASKS');
-  const [reportData, setReportData] = useState<{tasks: any[], users: any[]} | null>(null);
+  const [reportData, setReportData] = useState<{tasks: any[], users: any[]} | null>({ tasks: [], users: [] });
+  
+  const router = useRouter();
 
-  // 1. Load Projects List
+  // 1. Load Projects List (WITH TOKEN)
   useEffect(() => {
-    fetch('https://sfb-backend.vercel.app/projects').then(res => res.json()).then(data => {
-      if(Array.isArray(data) && data.length > 0) {
-        setProjects(data);
-        setSelectedProject(data[0].id); // Default to first project
-      }
-    });
+    const token = localStorage.getItem('token');
+    if (!token) { router.push('/login'); return; }
+
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects`, {
+      headers: { Authorization: `Bearer ${token}` } // <--- ADDED HEADER
+    })
+      .then(res => {
+         if (res.status === 401) { router.push('/login'); return []; }
+         return res.json();
+      })
+      .then(data => {
+        if(Array.isArray(data) && data.length > 0) {
+          setProjects(data);
+          setSelectedProject(data[0].id); 
+        }
+      })
+      .catch(console.error);
   }, []);
 
-  // 2. Load Report Data
+  // 2. Load Report Data (WITH TOKEN)
   useEffect(() => {
     if(!selectedProject) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
     const fetchReport = async () => {
       try {
-        const res = await fetch(`https://sfb-backend.vercel.app/reports/project?projectId=${selectedProject}&start=${startDate}&end=${endDate}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/project?projectId=${selectedProject}&start=${startDate}&end=${endDate}`, {
+           headers: { Authorization: `Bearer ${token}` } // <--- ADDED HEADER
+        });
+        
+        if (res.status === 401) { return; } // Token invalid
+        
         const data = await res.json();
-        setReportData(data);
-      } catch (err) { console.error(err); }
+        
+        if (data && (Array.isArray(data.tasks) || Array.isArray(data.users))) {
+            setReportData({
+                tasks: Array.isArray(data.tasks) ? data.tasks : [],
+                users: Array.isArray(data.users) ? data.users : []
+            });
+        } else {
+            setReportData({ tasks: [], users: [] });
+        }
+      } catch (err) { 
+          console.error(err); 
+          setReportData({ tasks: [], users: [] });
+      }
     };
     fetchReport();
   }, [selectedProject, startDate, endDate]);
 
-  // Date Logic (Same as User Report)
+  // ... (Keep handleFilterChange and formatTime logic exactly the same) ...
   const handleFilterChange = (type: any) => {
     setFilterType(type);
     const today = new Date();
@@ -65,7 +97,7 @@ export default function ProjectReportPage() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-800">Project Report</h2>
-
+      
       {/* FILTERS */}
       <div className="bg-white p-4 rounded shadow-sm border border-gray-200 flex flex-wrap gap-4 items-center justify-between">
         <div className="flex items-center gap-2">
@@ -122,20 +154,20 @@ export default function ProjectReportPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {activeTab === 'TASKS' && reportData?.tasks.map((item, idx) => (
+            {activeTab === 'TASKS' && (reportData?.tasks || []).map((item, idx) => (
               <tr key={idx} className="hover:bg-gray-50">
                 <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
                 <td className="px-6 py-4 text-right font-mono text-blue-600 bg-blue-50 w-32 rounded">{formatTime(item.seconds)}</td>
               </tr>
             ))}
-            {activeTab === 'USERS' && reportData?.users.map((item, idx) => (
+            {activeTab === 'USERS' && (reportData?.users || []).map((item, idx) => (
               <tr key={idx} className="hover:bg-gray-50">
                 <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
                 <td className="px-6 py-4 text-right font-mono text-purple-600 bg-purple-50 w-32 rounded">{formatTime(item.seconds)}</td>
               </tr>
             ))}
-             {((activeTab === 'TASKS' && reportData?.tasks.length === 0) || 
-               (activeTab === 'USERS' && reportData?.users.length === 0)) && (
+             {((activeTab === 'TASKS' && (reportData?.tasks || []).length === 0) || 
+               (activeTab === 'USERS' && (reportData?.users || []).length === 0)) && (
               <tr><td colSpan={2} className="px-6 py-8 text-center text-gray-400 italic">No activity recorded for this period.</td></tr>
             )}
           </tbody>

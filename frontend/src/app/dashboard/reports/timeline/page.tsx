@@ -167,7 +167,7 @@ export default function TimelinePage() {
 
       {/* TIMELINE VISUALIZATION */}
       <div className="bg-white p-6 rounded shadow-sm border border-gray-200 mb-6">
-        <h2 className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wide">Activity Visualization (24H)</h2>
+        <h2 className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wide">Activity Visualization</h2>
         <div className="relative w-full h-16 bg-gray-100 border border-gray-300 rounded overflow-hidden">
           {[...Array(25)].map((_, i) => (
             <div key={`hour-${i}`} className="absolute top-0 bottom-0 border-r border-gray-200 text-[9px] text-gray-400 pt-1 pl-1" style={{ left: `${(i / 24) * 100}%` }}>{i}</div>
@@ -175,8 +175,15 @@ export default function TimelinePage() {
           {sessions.map((session, index) => {
              const startPct = getLeftPercentage(session.startTime);
              const widthPct = getWidthPercentage(session.startTime, session.endTime);
-             return <div key={`bar-${session.id}-${index}`} className="absolute h-8 top-6 bg-green-500 rounded-sm opacity-90 border-l border-r border-green-600"
-                 style={{ left: `${startPct}%`, width: `${widthPct}%`, minWidth: '3px' }} title={session.task?.name || 'Unknown'} />;
+             const isBreak = session.notes?.startsWith('[BREAK]');
+             
+             return (
+               <div key={`bar-${session.id}-${index}`} 
+                className={`absolute h-8 top-6 rounded-sm opacity-90 border-l border-r ${isBreak ? 'bg-orange-400 border-orange-600' : 'bg-green-500 border-green-600'}`}
+                style={{ left: `${startPct}%`, width: `${widthPct}%`, minWidth: '3px' }} 
+                title={`${isBreak ? 'BREAK: ' : ''}${session.task?.name}`} 
+               />
+             );
           })}
         </div>
       </div>
@@ -189,19 +196,21 @@ export default function TimelinePage() {
           const startTime = new Date(session.startTime);
           const endTime = session.endTime ? new Date(session.endTime) : new Date();
           const durationSec = (endTime.getTime() - startTime.getTime()) / 1000;
+          const isBreak = session.notes?.startsWith('[BREAK]');
           
           const isOwner = session.userId === currentUser?.id;
           const isEmployer = currentUser?.role === 'EMPLOYER';
           const canDelete = isOwner || isEmployer;
 
           return (
-            <div key={`list-${session.id}-${index}`} className="bg-white border border-gray-200 rounded shadow-sm overflow-hidden hover:shadow-md transition">
-              <div className="bg-green-50 px-4 py-2 border-b border-green-100 flex justify-between items-center">
+            <div key={`list-${session.id}-${index}`} className={`bg-white border rounded shadow-sm overflow-hidden hover:shadow-md transition ${isBreak ? 'border-orange-200' : 'border-gray-200'}`}>
+              <div className={`${isBreak ? 'bg-orange-50' : 'bg-green-50'} px-4 py-2 border-b flex justify-between items-center`}>
                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-green-800 text-sm">
+                    <span className={`font-bold text-sm ${isBreak ? 'text-orange-800' : 'text-green-800'}`}>
                       {startTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} - {session.endTime ? endTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : 'Active'}
                     </span>
-                    <span className="text-xs text-green-600 font-medium">({formatDurationText(durationSec)})</span>
+                    <span className="text-xs font-medium opacity-70">({formatDurationText(durationSec)})</span>
+                    {isBreak && <span className="ml-2 text-[10px] bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded font-bold">BREAK SESSION</span>}
                  </div>
                  <div className="flex items-center gap-3">
                     <div className={`w-3 h-3 rounded-full ${session.endTime ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} title="Status"></div>
@@ -213,9 +222,14 @@ export default function TimelinePage() {
               <div className="px-4 py-3">
                  <div className="text-sm text-gray-700">
                     <span className="text-gray-500">Project:</span> <span className="font-semibold text-gray-900 mr-4">{session.task?.project?.name || 'No Project'}</span>
-                    <span className="text-gray-500">Task:</span> <span className="font-semibold text-gray-900">{session.task?.name || 'Unknown'}</span>
+                    <span className="text-gray-500">Task:</span> <span className="font-semibold text-gray-900">{session.task?.name}</span>
                  </div>
                  {session.isManual && <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1 rounded border border-yellow-200">MANUAL ENTRY</span>}
+                 {session.notes && (
+                    <div className="mt-2 p-2 bg-gray-50 border-l-4 border-blue-400 rounded text-sm italic text-gray-700">
+                        " {session.notes.replace('[BREAK] ', '')} "
+                    </div>
+                 )}
               </div>
               <div className="px-4 pb-3">
                  {session.screenshots && session.screenshots.length > 0 ? (

@@ -187,8 +187,8 @@ export default function TimesheetsPage() {
                   <th className="px-4 py-3 text-sm font-semibold">Out</th>
                   <th className="px-4 py-3 text-sm font-semibold text-right">Duration</th>
                   
-                  {/* NEW NOTES COLUMN */}
-                  <th className="px-4 py-3 text-sm font-semibold text-left w-1/3">Notes</th> 
+                  {/* NEW NOTES COLUMN
+                  <th className="px-4 py-3 text-sm font-semibold text-left w-1/3">Notes</th>  */}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -199,14 +199,14 @@ export default function TimesheetsPage() {
                   <td className="px-4 py-3 text-sm font-medium">{format(new Date(row.out), 'HH:mm:ss')}</td>
                   <td className="px-4 py-3 text-sm font-mono text-right font-bold text-blue-600">{formatDuration(row.duration)}</td>
                   
-                  {/* NEW NOTES DATA */}
+                  {/* NEW NOTES DATA
                   <td className="px-4 py-3 text-sm text-gray-600 italic">
                     {row.notes ? (
                         <span title={row.notes} className="block truncate max-w-xs">{row.notes}</span>
                     ) : (
                         <span className="text-gray-300">-</span>
                     )}
-                  </td>
+                  </td> */}
                 </tr>
               ))}
               {timesheetData.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-500">No time logs found.</td></tr>}
