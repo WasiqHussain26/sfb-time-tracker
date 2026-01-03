@@ -127,7 +127,7 @@ export default function Sidebar() {
           <p className="text-xs text-slate-400 mb-3">Get the Desktop App</p>
           <a 
             // OPTION A: If hosted in public/downloads folder
-            href="https://github.com/WasiqHussain26/sfb-time-tracker/releases/download/v1.0.0/SFB.Time.Tracker.Setup.1.0.0.exe" 
+            href="https://github.com/WasiqHussain26/sfb-time-tracker/releases/latest/download/SFB-Time-Tracker-Setup.exe"
             
             // OPTION B: If hosted on GitHub Releases (Recommended)
             // href="https://github.com/YOUR_USERNAME/REPO/releases/download/v1.0.0/setup.exe"
