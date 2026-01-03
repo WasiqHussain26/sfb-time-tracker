@@ -338,7 +338,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
           <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs">
             {user.name?.charAt(0)}
           </div>
-          {user.name} <span className="text-xs text-red-500">(v1.0.4 FIX)</span>
+          {user.name}
         </div>
 
         <div className="flex gap-1">
