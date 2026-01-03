@@ -12,6 +12,12 @@
       "dest": "src/index.ts"
     }
   ],
+  "crons": [
+    {
+      "path": "/reports/test-email",
+      "schedule": "55 23 * * *"
+    }
+  ],
   "env": {
     "NODE_VERSION": "18.x"
   }

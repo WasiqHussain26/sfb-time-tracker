@@ -1,6 +1,6 @@
 import { app, BrowserWindow, powerMonitor, ipcMain, desktopCapturer, shell, dialog } from 'electron';
 import path from 'path';
-import fs from 'fs'; // <--- ADDED fs
+import fs from 'fs'; 
 import { autoUpdater } from 'electron-updater'; 
 
 // Define paths for build vs dev
@@ -31,7 +31,6 @@ function createWindows() {
   });
 
   // --- EXTERNAL LINK HANDLER ---
-  // Ensures links open in Chrome/Edge, not inside the app
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://sfbtimetracker.com')) {
       shell.openExternal(url); 
@@ -84,26 +83,22 @@ function createWindows() {
   }
 
   autoUpdater.on('update-available', () => {
-    // Optional: Notify frontend to show spinner
     mainWindow?.webContents.send('update_available');
   });
 
+  // --- CHANGED: Don't show dialog, just notify Frontend ---
   autoUpdater.on('update-downloaded', () => {
     mainWindow?.webContents.send('update_downloaded');
-    dialog.showMessageBox({
-      type: 'info',
-      title: 'Update Ready',
-      message: 'A new version has been downloaded. Restart now to apply?',
-      buttons: ['Restart', 'Later']
-    }).then((result) => {
-      if (result.response === 0) {
-        autoUpdater.quitAndInstall();
-      }
-    });
+    // REMOVED THE POPUP DIALOG HERE
+  });
+  
+  // --- NEW: Listen for "Install Now" command
+  ipcMain.on('install-update', () => {
+    autoUpdater.quitAndInstall();
   });
 }
 
-// --- SESSION MANAGEMENT (FIX FOR PERSISTENCE) ---
+// --- SESSION MANAGEMENT ---
 const SESSION_FILE = path.join(app.getPath('userData'), 'session.json');
 
 ipcMain.on('save-session', (_event, data) => {
@@ -162,14 +157,13 @@ ipcMain.on('widget-toggle-timer', () => {
   }
 });
 
-// --- SCREENSHOT HANDLER (Dual Screen) ---
+// --- SCREENSHOT HANDLER ---
 ipcMain.handle('capture-screen', async () => {
   try {
     const sources = await desktopCapturer.getSources({ 
       types: ['screen'], 
       thumbnailSize: { width: 1920, height: 1080 } 
     });
-    // Return all screens as an array of Base64 strings
     return sources.map(source => source.thumbnail.toDataURL());
   } catch (err) {
     console.error("Main Process Screenshot Error:", err);
