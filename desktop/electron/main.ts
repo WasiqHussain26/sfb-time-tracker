@@ -1,4 +1,4 @@
-import { app, BrowserWindow, powerMonitor, ipcMain, desktopCapturer } from 'electron'
+import { app, BrowserWindow, powerMonitor, ipcMain, desktopCapturer, shell } from 'electron'
 import path from 'path'
 
 // Define paths for build vs dev
@@ -18,6 +18,7 @@ function createWindows() {
   mainWindow = new BrowserWindow({
     width: 420,
     height: 650,
+    title: "SFB Time Tracker", // UPDATED: Explicitly setting the window title
     icon: iconPath,
     webPreferences: {
       nodeIntegration: true,
@@ -27,15 +28,26 @@ function createWindows() {
     resizable: true,
   })
 
+  // --- NEW: EXTERNAL LINK HANDLER ---
+  // This ensures the "Forgot Password" link opens in Chrome/Edge, not inside the app
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://sfbtimetracker.com')) {
+      shell.openExternal(url); // Opens in system browser
+      return { action: 'deny' }; // Prevents Electron from opening a new window
+    }
+    return { action: 'allow' };
+  });
+
   // 2. MINI WIDGET WINDOW
   miniWindow = new BrowserWindow({
     width: 500, 
     height: 60,
+    title: "SFB Widget",
     frame: false,
     alwaysOnTop: true,
-    skipTaskbar: true, // Hide from taskbar, it acts as a floating widget
+    skipTaskbar: true, 
     resizable: false,
-    show: false, // Hidden by default until main is minimized
+    show: false, 
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -44,36 +56,27 @@ function createWindows() {
 
   // --- LOAD CONTENT (Dev vs Prod) ---
   if (devUrl) {
-    // Development Mode (Vite Server)
     mainWindow.loadURL(devUrl)
     miniWindow.loadURL(`${devUrl}#widget`)
-    // Optional: Open DevTools for debugging
-    // mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
-    // Production Mode (Built index.html from 'dist' folder)
     mainWindow.loadFile(indexHtml)
     miniWindow.loadFile(indexHtml, { hash: 'widget' })
   }
 
   // --- WINDOW BEHAVIOR LOGIC ---
-
-  // 1. When Main is Minimized -> Show Widget
   mainWindow.on('minimize', () => {
     miniWindow?.show();
   });
 
-  // 2. When Main is Restored -> Hide Widget
   mainWindow.on('restore', () => {
     miniWindow?.hide();
   });
 
-  // 3. When Main gains focus -> Hide Widget (Optional UX preference)
   mainWindow.on('focus', () => {
     miniWindow?.hide();
   });
 
   // --- IDLE CHECKING ---
-  // Sends 'system-idle-status' event to renderer every second
   setInterval(() => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       const idleSeconds = powerMonitor.getSystemIdleTime();
@@ -82,16 +85,13 @@ function createWindows() {
   }, 1000);
 }
 
-// --- IPC EVENTS (Communication) ---
-
-// 1. Dashboard sends data to Widget (Time, Task Name)
+// --- IPC EVENTS ---
 ipcMain.on('update-widget', (_event, data) => {
   if (miniWindow && !miniWindow.isDestroyed()) {
     miniWindow.webContents.send('sync-widget-data', data);
   }
 });
 
-// 2. Widget asks to Expand (Clicking Task Name or "Stop")
 ipcMain.on('expand-main-window', () => {
   miniWindow?.hide();
   if (mainWindow) {
@@ -101,18 +101,13 @@ ipcMain.on('expand-main-window', () => {
   }
 });
 
-// 3. Widget asks to Hide (The "Hide" button)
 ipcMain.on('hide-widget', () => {
   miniWindow?.hide();
 });
 
-// 4. Widget clicks "Start/Stop"
 ipcMain.on('widget-toggle-timer', () => {
   if (mainWindow) {
-    // Forward the toggle command to the Main Window React App
     mainWindow.webContents.send('trigger-timer-toggle');
-    
-    // Restore window so user can see what happened
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   }
@@ -125,9 +120,6 @@ ipcMain.handle('capture-screen', async () => {
       types: ['screen'], 
       thumbnailSize: { width: 1280, height: 720 } 
     });
-
-    // Return the first screen as a Base64 string
-    // This string is sent back to React when it calls ipcRenderer.invoke('capture-screen')
     return sources[0].thumbnail.toDataURL();
   } catch (err) {
     console.error("Main Process Screenshot Error:", err);
@@ -136,7 +128,6 @@ ipcMain.handle('capture-screen', async () => {
 });
 
 // --- LIFECYCLE ---
-
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })

@@ -127,12 +127,12 @@ export default function Sidebar() {
           <p className="text-xs text-slate-400 mb-3">Get the Desktop App</p>
           <a 
             // OPTION A: If hosted in public/downloads folder
-            href="https://github.com/WasiqHussain26/sfb-time-tracker/releases/download/v1.0.0/SF.Time.Tracker.Setup.1.0.0.exe" 
+            href="https://github.com/WasiqHussain26/sfb-time-tracker/releases/download/v1.0.0/SFB.Time.Tracker.Setup.1.0.0.exe" 
             
             // OPTION B: If hosted on GitHub Releases (Recommended)
             // href="https://github.com/YOUR_USERNAME/REPO/releases/download/v1.0.0/setup.exe"
             
-            download // This forces the browser to download instead of open
+            download // This forces the browse  r to download instead of open
             className="block w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold py-2 rounded transition shadow-lg flex items-center justify-center gap-2"
           >
             <span>⬇</span> Download Windows
