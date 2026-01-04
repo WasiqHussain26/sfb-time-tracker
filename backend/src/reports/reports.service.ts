@@ -104,29 +104,52 @@ export class ReportsService {
     const startDate = new Date(start);
     const endDate = new Date(end);
 
+    // Ensure accurate full-day inclusion
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+
     const sessions = await this.prisma.timeSession.findMany({
       where: { userId, startTime: { gte: startDate, lte: endDate } },
       include: { task: { include: { project: true } } }
     });
 
-    // Group by project
-    const projectStats: any = {};
-    let totalSeconds = 0;
+    const projectMap = new Map<string, { tracked: number, manual: number }>();
+    const taskMap = new Map<string, { tracked: number, manual: number }>();
 
     sessions.forEach(s => {
       const duration = (s.endTime ? new Date(s.endTime).getTime() : new Date().getTime()) - new Date(s.startTime).getTime();
       const seconds = Math.floor(duration / 1000);
-      totalSeconds += seconds;
 
+      const isManual = s.isManual;
       const projName = s.task?.project?.name || 'Unassigned';
-      if (!projectStats[projName]) projectStats[projName] = 0;
-      projectStats[projName] += seconds;
+      const taskName = s.task?.name || 'Unknown Task';
+
+      // Project Stats
+      if (!projectMap.has(projName)) projectMap.set(projName, { tracked: 0, manual: 0 });
+      const pStat = projectMap.get(projName)!;
+      if (isManual) pStat.manual += seconds; else pStat.tracked += seconds;
+
+      // Task Stats
+      if (!taskMap.has(taskName)) taskMap.set(taskName, { tracked: 0, manual: 0 });
+      const tStat = taskMap.get(taskName)!;
+      if (isManual) tStat.manual += seconds; else tStat.tracked += seconds;
     });
 
-    return {
-      totalSeconds,
-      projectStats
-    };
+    const projects = Array.from(projectMap.entries()).map(([name, stats]) => ({
+      name,
+      trackedSeconds: stats.tracked,
+      manualSeconds: stats.manual,
+      totalSeconds: stats.tracked + stats.manual
+    })).sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+    const tasks = Array.from(taskMap.entries()).map(([name, stats]) => ({
+      name,
+      trackedSeconds: stats.tracked,
+      manualSeconds: stats.manual,
+      totalSeconds: stats.tracked + stats.manual
+    })).sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+    return { projects, tasks };
   }
 
   async getProjectReport(projectId: number, start: string, end: string) {
@@ -269,6 +292,9 @@ export class ReportsService {
     const startDate = new Date(start);
     const endDate = new Date(end);
 
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+
     const where: any = { startTime: { gte: startDate, lte: endDate } };
     if (userId) where.userId = userId;
 
@@ -277,22 +303,57 @@ export class ReportsService {
       include: { user: true, task: { include: { project: true } } }
     });
 
-    let totalSeconds = 0;
-    const byUser: any = {};
-    const byProject: any = {};
+    // Maps to store aggregated data
+    const empMap = new Map<number, { id: number, name: string, email: string, manual: number, tracked: number }>();
+    const projMap = new Map<number, { id: number, name: string, manual: number, tracked: number }>();
+    const taskMap = new Map<number, { id: number, name: string, projectName: string, manual: number, tracked: number }>();
 
     sessions.forEach(s => {
-      const sec = Math.floor(((s.endTime ? new Date(s.endTime).getTime() : new Date().getTime()) - new Date(s.startTime).getTime()) / 1000);
-      totalSeconds += sec;
+      const duration = (s.endTime ? new Date(s.endTime).getTime() : new Date().getTime()) - new Date(s.startTime).getTime();
+      const seconds = Math.floor(duration / 1000);
+      const isManual = s.isManual;
 
-      if (!byUser[s.user.name || 'Bnknown']) byUser[s.user.name || 'Unknown'] = 0;
-      byUser[s.user.name || 'Unknown'] += sec;
+      // Employee Stats
+      if (!empMap.has(s.userId)) {
+        empMap.set(s.userId, {
+          id: s.userId, name: s.user.name || 'Unknown', email: s.user.email, manual: 0, tracked: 0
+        });
+      }
+      const eStat = empMap.get(s.userId)!;
+      if (isManual) eStat.manual += seconds; else eStat.tracked += seconds;
 
-      const proj = s.task.project?.name || 'Unassigned';
-      if (!byProject[proj]) byProject[proj] = 0;
-      byProject[proj] += sec;
+      // Project Stats
+      const pid = s.task.projectId;
+      const pName = s.task.project?.name || 'Unassigned';
+      if (!projMap.has(pid)) {
+        projMap.set(pid, { id: pid, name: pName, manual: 0, tracked: 0 });
+      }
+      const pStat = projMap.get(pid)!;
+      if (isManual) pStat.manual += seconds; else pStat.tracked += seconds;
+
+      // Task Stats
+      const tid = s.taskId;
+      if (!taskMap.has(tid)) {
+        taskMap.set(tid, {
+          id: tid, name: s.task.name, projectName: pName, manual: 0, tracked: 0
+        });
+      }
+      const tStat = taskMap.get(tid)!;
+      if (isManual) tStat.manual += seconds; else tStat.tracked += seconds;
     });
 
-    return { totalSeconds, byUser, byProject };
+    const employees = Array.from(empMap.values()).map(e => ({
+      ...e, totalSeconds: e.tracked + e.manual, manualSeconds: e.manual
+    })).sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+    const projects = Array.from(projMap.values()).map(p => ({
+      ...p, totalSeconds: p.tracked + p.manual, manualSeconds: p.manual
+    })).sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+    const tasks = Array.from(taskMap.values()).map(t => ({
+      ...t, totalSeconds: t.tracked + t.manual, manualSeconds: t.manual
+    })).sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+    return { employees, projects, tasks };
   }
 }
