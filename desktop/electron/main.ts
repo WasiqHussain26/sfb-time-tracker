@@ -1,7 +1,7 @@
 import { app, BrowserWindow, powerMonitor, ipcMain, desktopCapturer, shell, dialog } from 'electron';
 import path from 'path';
-import fs from 'fs'; 
-import { autoUpdater } from 'electron-updater'; 
+import fs from 'fs';
+import { autoUpdater } from 'electron-updater';
 
 // Define paths for build vs dev
 process.env.DIST = path.join(__dirname, '../dist');
@@ -11,7 +11,7 @@ let mainWindow: BrowserWindow | null;
 let miniWindow: BrowserWindow | null;
 
 // Use your new logo if available, otherwise default
-const iconPath = path.join(process.env.VITE_PUBLIC || '', 'logo.png'); 
+const iconPath = path.join(process.env.VITE_PUBLIC || '', 'icon.ico');
 const indexHtml = path.join(process.env.DIST, 'index.html');
 const devUrl = process.env.VITE_DEV_SERVER_URL;
 
@@ -24,7 +24,7 @@ function createWindows() {
     icon: iconPath,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false, 
+      contextIsolation: false,
     },
     autoHideMenuBar: true,
     resizable: true,
@@ -33,25 +33,25 @@ function createWindows() {
   // --- EXTERNAL LINK HANDLER ---
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://sfbtimetracker.com')) {
-      shell.openExternal(url); 
-      return { action: 'deny' }; 
+      shell.openExternal(url);
+      return { action: 'deny' };
     }
     return { action: 'allow' };
   });
 
   // 2. MINI WIDGET WINDOW
   miniWindow = new BrowserWindow({
-    width: 500, 
+    width: 500,
     height: 60,
     title: "SFB Widget",
     frame: false,
     alwaysOnTop: true,
-    skipTaskbar: true, 
+    skipTaskbar: true,
     resizable: false,
-    show: false, 
+    show: false,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false, 
+      contextIsolation: false,
     },
   });
 
@@ -68,6 +68,12 @@ function createWindows() {
   mainWindow.on('minimize', () => miniWindow?.show());
   mainWindow.on('restore', () => miniWindow?.hide());
   mainWindow.on('focus', () => miniWindow?.hide());
+
+  // CRITICAL: Ensure app quits when main window is closed so updates can install
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    app.quit();
+  });
 
   // --- IDLE CHECKING ---
   setInterval(() => {
@@ -91,7 +97,7 @@ function createWindows() {
     mainWindow?.webContents.send('update_downloaded');
     // REMOVED THE POPUP DIALOG HERE
   });
-  
+
   // --- NEW: Listen for "Install Now" command
   ipcMain.on('install-update', () => {
     autoUpdater.quitAndInstall();
@@ -122,14 +128,22 @@ ipcMain.handle('get-session', () => {
 });
 
 ipcMain.on('clear-session', () => {
-    try {
-        if (fs.existsSync(SESSION_FILE)) fs.unlinkSync(SESSION_FILE);
-    } catch (e) {
-        console.error("Failed to clear session:", e);
-    }
+  try {
+    if (fs.existsSync(SESSION_FILE)) fs.unlinkSync(SESSION_FILE);
+  } catch (e) {
+    console.error("Failed to clear session:", e);
+  }
 });
 
 // --- IPC EVENTS ---
+ipcMain.on('minimize-app', () => {
+  mainWindow?.minimize();
+});
+
+ipcMain.on('close-app', () => {
+  mainWindow?.close();
+});
+
 ipcMain.on('update-widget', (_event, data) => {
   if (miniWindow && !miniWindow.isDestroyed()) {
     miniWindow.webContents.send('sync-widget-data', data);
@@ -160,9 +174,9 @@ ipcMain.on('widget-toggle-timer', () => {
 // --- SCREENSHOT HANDLER ---
 ipcMain.handle('capture-screen', async () => {
   try {
-    const sources = await desktopCapturer.getSources({ 
-      types: ['screen'], 
-      thumbnailSize: { width: 1920, height: 1080 } 
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1920, height: 1080 }
     });
     return sources.map(source => source.thumbnail.toDataURL());
   } catch (err) {
@@ -181,8 +195,8 @@ app.on('activate', () => {
 });
 
 let isQuitting = false;
-app.on('before-quit', () => { 
-    isQuitting = true; 
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
 app.whenReady().then(createWindows);

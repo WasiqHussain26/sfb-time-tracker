@@ -14,8 +14,10 @@ interface TrackerProps {
 }
 
 export default function TrackerDashboard({ user, token, onLogout }: TrackerProps) {
-  // CONFIG
-  const AUTO_STOP_LIMIT_MINUTES = user.autoStopLimit || 5;
+  // CONFIG (Dynamic State)
+  const [autoStopLimit, setAutoStopLimit] = useState(user.autoStopLimit || 5);
+  const autoStopLimitRef = useRef(autoStopLimit);
+  useEffect(() => { autoStopLimitRef.current = autoStopLimit; }, [autoStopLimit]);
 
   // --- STATE ---
   const [projects, setProjects] = useState<any[]>([]);
@@ -44,6 +46,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
 
   // --- REF ---
   const activeSessionRef = useRef(activeSession);
+  const isStoppingRef = useRef(false); // <--- LOCK to prevent loops
   useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
 
   // --- 1. INITIAL LOAD & LISTENERS ---
@@ -56,12 +59,24 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         const isIdle = idleSeconds >= 60;
         setIsSystemIdle(isIdle);
 
-        if (activeSessionRef.current) {
-          if (idleSeconds >= (AUTO_STOP_LIMIT_MINUTES * 60)) {
-            console.log(`🛑 Auto-stopping due to inactivity.`);
-            handleStopTimer(true);
+        // CHECK AUTO-STOP
+        if (activeSessionRef.current && !isStoppingRef.current) {
+          const limitSeconds = (autoStopLimitRef.current || 5) * 60;
+
+          if (idleSeconds >= limitSeconds) {
+            console.log(`🛑 Auto-stopping triggered (Idle: ${idleSeconds}s, Limit: ${limitSeconds}s)`);
+
+            // LOCK immediately preventing further triggers
+            isStoppingRef.current = true;
+
+            // Trigger Stop
+            handleStopTimer(true).catch(err => {
+              console.error("Auto-stop failed:", err);
+              isStoppingRef.current = false; // Unlock if it actually failed hard
+            });
+
             new Notification("Timer Stopped", {
-              body: `Timer stopped automatically due to inactivity (${AUTO_STOP_LIMIT_MINUTES}m limit).`
+              body: `Timer stopped automatically due to inactivity (${autoStopLimitRef.current}m limit).`
             });
           }
         }
@@ -91,6 +106,10 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
           const data = await res.json();
           if (data.status === 'DISABLED') {
             onLogout();
+          }
+          // Also sync limit in background
+          if (data.autoStopLimit && data.autoStopLimit !== autoStopLimitRef.current) {
+            setAutoStopLimit(data.autoStopLimit);
           }
         } catch (e) {
           console.warn("Heartbeat failed");
@@ -177,10 +196,25 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
   }, [activeSession?.id]);
 
   // --- 5. API CALLS (Data Fetching) ---
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     fetchProjects();
     checkActiveSession();
     fetchStats();
+
+    // FETCH LATEST SETTINGS (Fix for Inactivity Update)
+    try {
+      const res = await fetch(`${API_URL}/users/${user.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.autoStopLimit) {
+          setAutoStopLimit(data.autoStopLimit);
+          console.log("Updated Auto-Stop Limit to:", data.autoStopLimit);
+        }
+      }
+    } catch (e) { console.error("Failed to refresh user settings", e); }
+
     // CRITICAL FIX: Reload tasks for current project if selected
     if (selectedProjectId) {
       fetchTasksForProject(selectedProjectId);
@@ -257,7 +291,8 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
 
   const handleStopTimer = async (isAutoStop = false, isBreak = false) => {
     if (isAutoStop) {
-      await executeStop(`Auto-stopped due to inactivity (${AUTO_STOP_LIMIT_MINUTES}m limit).`);
+      const limit = autoStopLimitRef.current || 5;
+      await executeStop(`Auto-stopped due to inactivity (${limit}m limit).`);
       return;
     }
     setStopNotes('');
@@ -309,6 +344,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         setActiveSession(null);
         setElapsed(0);
         setIsSystemIdle(false);
+        isStoppingRef.current = false; // <--- UNLOCK
         fetchStats();
       }
     } catch (err) { console.error(err); }
@@ -331,47 +367,42 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     // THEME: BRAND BLUE (bg-blue-600)
     <div className="h-screen w-full flex flex-col bg-blue-600 text-white font-sans select-none overflow-hidden">
 
-      {/* 1. COMPACT HEADER (Transparent/Blue) */}
-      <div className="bg-blue-700/50 border-b border-blue-500/30 px-3 h-12 flex justify-between items-center shadow-sm z-20 shrink-0">
+      {/* 1.5 SUB-HEADER (User Info & Refresh) - TOP SPACING INCREASED */}
+      <div className="px-3 pt-3 pb-2 flex justify-between items-center shrink-0 z-20">
         <div className="flex items-center gap-2">
-          {/* Avatar */}
-          <div className="w-7 h-7 bg-white text-blue-600 rounded-full flex items-center justify-center font-bold text-xs shadow-md">
+          <div className="w-9 h-9 bg-white text-blue-600 rounded-full flex items-center justify-center font-bold text-sm shadow-md border-2 border-blue-500/30">
             {user.name?.charAt(0)}
           </div>
           <div>
-            <h2 className="text-xs font-bold text-white leading-tight">{user.name}</h2>
-            <div className="flex items-center gap-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${isSystemIdle ? 'bg-orange-300' : 'bg-green-300'} shadow-sm`}></span>
-              <span className="text-[9px] uppercase font-bold tracking-wider text-blue-100">
-                {isSystemIdle ? 'Idle' : 'Online'}
-              </span>
+            <h2 className="text-xs font-bold text-white leading-tight mb-0.5">{user.name}</h2>
+
+            {/* MOVED STATUS INDICATOR HERE */}
+            <div className="flex items-center gap-1.5">
+              <div className={`flex items-center gap-1 pl-0 pr-1.5 py-0 rounded-full`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${isSystemIdle ? 'bg-orange-400' : 'bg-green-400'} shadow-[0_0_5px_rgba(255,255,255,0.6)]`} />
+                <span className={`text-[9px] font-bold uppercase tracking-wider ${isSystemIdle ? 'text-orange-200' : 'text-green-200'}`}>
+                  {isSystemIdle ? 'Idle' : 'Live'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Update Button */}
+        <div className="flex items-center gap-1">
           {isUpdateReady && (
             <button
               onClick={handleInstallUpdate}
               disabled={isUpdating}
-              className="bg-white text-blue-600 px-2 py-1 rounded-full text-[10px] font-bold animate-pulse shadow-sm transition flex items-center gap-1"
+              className="bg-white text-blue-600 px-2 py-1 rounded-full text-[10px] font-bold animate-pulse shadow-sm transition flex items-center gap-1 mr-1"
             >
-              <span>✨</span>
-              {isUpdating ? '...' : 'UPDATE'}
+              <span>✨ Update</span>
             </button>
           )}
-
-          <button
-            onClick={handleRefresh}
-            className="p-1.5 text-blue-200 hover:text-white hover:bg-white/20 rounded-full transition"
-            title="Refresh Tasks"
-          >
-            <span className="text-base leading-none">↻</span>
+          <button onClick={handleRefresh} className="w-8 h-8 flex items-center justify-center text-blue-100 hover:text-white hover:bg-white/10 rounded-full transition" title="Refresh">
+            <span className="text-lg pb-0.5">↻</span>
           </button>
-
-          <button onClick={onLogout} className="p-1.5 text-blue-200 hover:text-white hover:bg-white/20 rounded-full transition" title="Logout">
-            <span className="text-base leading-none">⏻</span>
+          <button onClick={onLogout} className="w-8 h-8 flex items-center justify-center text-blue-100 hover:text-white hover:bg-white/10 rounded-full transition" title="Logout">
+            <span className="text-lg pb-0.5">⏻</span>
           </button>
         </div>
       </div>

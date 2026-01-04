@@ -1,7 +1,7 @@
 {
   "name": "sfb-time-tracker",
   "private": true,
-  "version": "1.0.7",
+  "version": "1.0.9",
   "description": "SF Business Solutions Time Tracker",
   "author": "SF Business Solutions",
   "repository": {
@@ -36,7 +36,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "c/logo.png",
+      "icon": "public/icon.ico",
       "artifactName": "${productName} Setup.${ext}",
       "publish": [
         "github"

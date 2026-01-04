@@ -67,10 +67,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="text-4xl font-black text-white tracking-tighter drop-shadow-sm mb-2"
+            className="text-3xl font-black text-white tracking-tighter drop-shadow-sm mb-2"
           >
             SFB
-            <span className="text-blue-200 ml-2 font-light">Tracker</span>
+            <span className="text-blue-200 ml-2 font-light">Time Tracker</span>
           </motion.h2>
 
           <motion.div
@@ -79,10 +79,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             transition={{ delay: 0.4, duration: 0.5 }}
             className="h-1 bg-white/30 rounded-full mb-3"
           />
-
-          <p className="text-blue-100 text-xs font-bold uppercase tracking-[3px]">
-            Enterprise Gateway
-          </p>
         </div>
 
         {/* Animated Error Box */}
