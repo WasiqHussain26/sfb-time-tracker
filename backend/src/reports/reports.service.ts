@@ -156,35 +156,64 @@ export class ReportsService {
     const startDate = new Date(start);
     const endDate = new Date(end);
 
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+
     const sessions = await this.prisma.timeSession.findMany({
       where: { task: { projectId }, startTime: { gte: startDate, lte: endDate } },
       include: { user: true, task: true }
     });
 
-    let totalSeconds = 0;
-    const userStats: any = {};
+    const taskMap = new Map<number, { name: string, seconds: number }>();
+    const userMap = new Map<number, { name: string, seconds: number }>();
 
     sessions.forEach(s => {
       const duration = (s.endTime ? new Date(s.endTime).getTime() : new Date().getTime()) - new Date(s.startTime).getTime();
       const seconds = Math.floor(duration / 1000);
-      totalSeconds += seconds;
 
-      const userName = s.user?.name || 'Unknown';
-      if (!userStats[userName]) userStats[userName] = 0;
-      userStats[userName] += seconds;
+      // Task Stats
+      if (!taskMap.has(s.taskId)) taskMap.set(s.taskId, { name: s.task.name, seconds: 0 });
+      taskMap.get(s.taskId)!.seconds += seconds;
+
+      // User Stats
+      if (!userMap.has(s.userId)) userMap.set(s.userId, { name: s.user.name || 'Unknown', seconds: 0 });
+      userMap.get(s.userId)!.seconds += seconds;
     });
 
-    return { totalSeconds, userStats };
+    const tasks = Array.from(taskMap.values()).sort((a, b) => b.seconds - a.seconds);
+    const users = Array.from(userMap.values()).sort((a, b) => b.seconds - a.seconds);
+
+    return { tasks, users };
   }
 
   async getTimesheet(userId: number, start: string, end: string) {
     const startDate = new Date(start);
     const endDate = new Date(end);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
 
-    return this.prisma.timeSession.findMany({
+    const sessions = await this.prisma.timeSession.findMany({
       where: { userId, startTime: { gte: startDate, lte: endDate } },
       include: { task: { include: { project: true } } },
       orderBy: { startTime: 'desc' }
+    });
+
+    return sessions.map(s => {
+      const startTime = new Date(s.startTime);
+      const endTime = s.endTime ? new Date(s.endTime) : new Date();
+      const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+
+      return {
+        id: s.id,
+        date: format(startTime, 'yyyy-MM-dd'),
+        in: s.startTime,
+        out: s.endTime || new Date(),
+        duration: duration,
+        notes: s.notes || '',
+        taskName: s.task?.name,
+        projectName: s.task?.project?.name,
+        isManual: s.isManual
+      };
     });
   }
 
@@ -195,37 +224,10 @@ export class ReportsService {
     return this.prisma.timeSession.findMany({
       where: { userId, startTime: { gte: start, lte: end } },
       orderBy: { startTime: 'asc' },
-      include: { task: true }
-    });
-  }
-
-  async getPayrollReport(start: string, end: string) {
-    // Basic aggregation for all users
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-
-    const users = await this.prisma.user.findMany({
       include: {
-        timeSessions: {
-          where: { startTime: { gte: startDate, lte: endDate } }
-        }
+        task: { include: { project: true } },
+        screenshots: { orderBy: { capturedAt: 'asc' } }
       }
-    });
-
-    return users.map(u => {
-      const totalSeconds = u.timeSessions.reduce((acc, s) => {
-        const dur = (s.endTime ? new Date(s.endTime).getTime() : new Date().getTime()) - new Date(s.startTime).getTime();
-        return acc + (dur / 1000);
-      }, 0);
-
-      // Mock rate
-      const rate = 15;
-      return {
-        userId: u.id,
-        name: u.name,
-        totalHours: (totalSeconds / 3600).toFixed(2),
-        amount: ((totalSeconds / 3600) * rate).toFixed(2)
-      };
     });
   }
 
@@ -239,20 +241,61 @@ export class ReportsService {
       orderBy: { startTime: 'asc' }
     });
 
-    return sessions.map(s => ({
-      id: s.id,
-      userName: s.user.name,
-      taskName: s.task.name,
-      projectName: s.task.project?.name,
-      start: s.startTime,
-      end: s.endTime,
-      duration: s.endTime ? (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 1000 : 0
-    }));
+    // Group by User
+    const userMap = new Map<number, any>();
+
+    sessions.forEach(s => {
+      const duration = (s.endTime ? new Date(s.endTime).getTime() : new Date().getTime()) - new Date(s.startTime).getTime();
+      const seconds = Math.floor(duration / 1000);
+
+      if (!userMap.has(s.userId)) {
+        userMap.set(s.userId, {
+          user: { id: s.userId, name: s.user.name, email: s.user.email },
+          totalSeconds: 0,
+          manualSeconds: 0,
+          lastTaskName: '',
+          sessions: []
+        });
+      }
+      const uData = userMap.get(s.userId);
+      uData.totalSeconds += seconds;
+      if (s.isManual) uData.manualSeconds += seconds;
+      uData.sessions.push(s);
+      uData.lastTaskName = s.task.name; // Since ordered asc, last one is correct
+    });
+
+    return Array.from(userMap.values());
   }
 
   async getEmployeeHistory(userId: number, start: string, end: string) {
-    // Re-use logic or custom
-    return this.getUserReport(userId, start, end);
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+
+    const sessions = await this.prisma.timeSession.findMany({
+      where: { userId, startTime: { gte: startDate, lte: endDate } },
+      orderBy: { startTime: 'asc' }
+    });
+
+    // Group by Date
+    const dateMap = new Map<string, { date: string, totalSeconds: number, sessions: any[] }>();
+
+    // Initialize buckets for range? Optional, but let's just show active days
+    sessions.forEach(s => {
+      const dKey = format(new Date(s.startTime), 'yyyy-MM-dd');
+      const duration = (s.endTime ? new Date(s.endTime).getTime() : new Date().getTime()) - new Date(s.startTime).getTime();
+      const seconds = Math.floor(duration / 1000);
+
+      if (!dateMap.has(dKey)) {
+        dateMap.set(dKey, { date: dKey, totalSeconds: 0, sessions: [] });
+      }
+      const dData = dateMap.get(dKey)!;
+      dData.totalSeconds += seconds;
+      dData.sessions.push(s);
+    });
+
+    return Array.from(dateMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
   async getUserStats(userId: number) {
