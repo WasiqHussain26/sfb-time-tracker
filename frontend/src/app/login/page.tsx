@@ -119,6 +119,9 @@ export default function LoginPage() {
             <div className="relative group">
               <input
                 type="email"
+                name="email"
+                id="email"
+                autoComplete="email"
                 required
                 placeholder="name@company.com"
                 className="w-full px-4 py-3.5 bg-white/20 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-white/50 focus:bg-white/30 transition-all text-white placeholder-blue-100/50 group-hover:bg-white/25"
@@ -135,6 +138,9 @@ export default function LoginPage() {
             <div className="relative group">
               <input
                 type="password"
+                name="password"
+                id="password"
+                autoComplete="current-password"
                 required
                 placeholder="••••••••"
                 className="w-full px-4 py-3.5 bg-white/20 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-white/50 focus:bg-white/30 transition-all text-white placeholder-blue-100/50 group-hover:bg-white/25"
