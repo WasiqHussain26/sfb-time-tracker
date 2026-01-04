@@ -41,13 +41,21 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
   const [isStopModalOpen, setIsStopModalOpen] = useState(false);
   const [stopNotes, setStopNotes] = useState('');
   const [stopLoading, setStopLoading] = useState(false);
+  const [stopError, setStopError] = useState(''); // <--- REPLACE ALERT
 
   const [isBreakMode, setIsBreakMode] = useState(false);
+
+  // RESUME FEATURE
+  const [lastTaskId, setLastTaskId] = useState<string>('');
+  const [lastTaskName, setLastTaskName] = useState<string>('');
 
   // --- REF ---
   const activeSessionRef = useRef(activeSession);
   const isStoppingRef = useRef(false); // <--- LOCK to prevent loops
+  const lastTaskIdRef = useRef(''); // Ref for sync access in callbacks
+
   useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
+  useEffect(() => { lastTaskIdRef.current = lastTaskId; }, [lastTaskId]);
 
   // --- 1. INITIAL LOAD & LISTENERS ---
   useEffect(() => {
@@ -88,10 +96,24 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         setIsUpdateReady(true);
       });
 
-      // TRIGGER TOGGLE (System Tray)
+      // TRIGGER TOGGLE (System Tray / Widget)
       ipcRenderer.on('trigger-timer-toggle', () => {
-        if (activeSessionRef.current) handleStopTimer(false);
-        else handleStartTimer();
+        if (activeSessionRef.current) {
+          handleStopTimer(false);
+        } else {
+          // RESUME LOGIC: If a task is selected OR we have a last task
+          if (activeSessionRef.current) return; // double check
+
+          if (selectedTaskId) {
+            handleStartTimer();
+          } else if (lastTaskIdRef.current) {
+            // Auto-resume last task
+            handleStartTimer(lastTaskIdRef.current);
+          } else {
+            // No task to resume, open window
+            ipcRenderer.send('expand-main-window');
+          }
+        }
       });
 
       // TRIGGER BREAK MODE (Mini Widget - Silent)
@@ -129,21 +151,29 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         clearInterval(heartbeatInterval);
       };
     }
-  }, []);
+  }, []); // Add selectedTaskId dep so toggle listener sees it? Actually better to use refs or updated listener
 
   // --- 2. WIDGET SYNC ---
   useEffect(() => {
     if (ipcRenderer) {
       const timeStr = activeSession ? formatTimerBig(elapsed) : '00:00:00';
-      const taskName = activeSession?.task?.name || 'No Task';
+      // If running, show current task. If stopped, show "Resume: Last Task" or "No Task"
+      let displayTask = 'No Active Task';
+
+      if (activeSession?.task?.name) {
+        displayTask = activeSession.task.name;
+      } else if (lastTaskName) {
+        displayTask = `${lastTaskName}`; // Widget will show this when paused
+      }
 
       ipcRenderer.send('update-widget', {
         time: timeStr,
-        task: taskName,
-        isRunning: !!activeSession
+        task: displayTask,
+        isRunning: !!activeSession,
+        canResume: !activeSession && !!lastTaskId // Flag for widget UI if needed
       });
     }
-  }, [elapsed, activeSession]);
+  }, [elapsed, activeSession, lastTaskName, lastTaskId]);
 
   // --- 3. TIMER TICKER ---
   useEffect(() => {
@@ -246,7 +276,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
       const data = await res.json();
       const myTasks = (data.tasks || []).filter((t: any) => t.isOpenToAll || t.assignees?.some((u: any) => u.id === user.id));
       setTasks(myTasks);
-      // If we are refreshing and the current selected task is still in the list, keep it. 
+      // If we are refreshing and the current selected task is still in the list, keep it.
       // Otherwise default to first or empty.
       // Logic handled by react state preservation usually, but good to be safe.
       if (myTasks.length > 0 && !activeSession && !selectedTaskId) setSelectedTaskId(myTasks[0].id);
@@ -262,6 +292,10 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         setSelectedProjectId(data.task.projectId);
         fetchTasksForProject(data.task.projectId);
         setSelectedTaskId(data.taskId);
+
+        // Populate Resume Data
+        setLastTaskId(data.taskId.toString());
+        setLastTaskName(data.task.name);
       }
     } catch (e) { console.error(e); }
   };
@@ -280,17 +314,26 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     fetchTasksForProject(projId);
   };
 
-  const handleStartTimer = async () => {
-    if (!selectedTaskId) return alert("Please select a task first");
+  const handleStartTimer = async (explicitTaskId?: string | number) => {
+    // 1. Use explicit ID if provided (Resume feature)
+    // 2. Fallback to selectedTaskId
+    const targetTaskId = explicitTaskId || selectedTaskId;
+
+    if (!targetTaskId) return alert("Please select a task first");
+
     try {
       const res = await fetch(`${API_URL}/time-tracking/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ userId: user.id, taskId: Number(selectedTaskId) })
+        body: JSON.stringify({ userId: user.id, taskId: Number(targetTaskId) })
       });
       if (res.ok) {
         const session = await res.json();
         setActiveSession(session);
+
+        // Update Resume Data
+        setLastTaskId(session.taskId.toString());
+        setLastTaskName(session.task.name);
       }
     } catch (err) { console.error(err); }
   };
@@ -312,6 +355,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
 
     // 3. STOP MODE: Open Modal for Notes
     setStopNotes('');
+    setStopError(''); // Reset Error
     setIsBreakMode(false);
     setIsStopModalOpen(true);
     // Ensure input is not disabled by stale state
@@ -332,8 +376,12 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     e.preventDefault();
 
     // VALIDATION: Notes mandatory for STOP
+    // FIX: Use inline error instead of alert() to prevent focus theft!
     if (!stopNotes.trim()) {
-      return alert("Notes are compulsory for documentation.");
+      setStopError("Notes are compulsory. Please describe your work.");
+      // Re-focus text area if needed
+      if (textareaRef.current) textareaRef.current.focus();
+      return;
     }
 
     setStopLoading(true);
@@ -343,7 +391,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
       setIsStopModalOpen(false);
     } catch (error) {
       console.error("Stop failed", error);
-      alert("Failed to stop timer. Please try again.");
+      setStopError("Failed to stop. Please check your connection.");
     } finally {
       setStopLoading(false);
     }
@@ -467,7 +515,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
 
           {!activeSession ? (
             <button
-              onClick={handleStartTimer}
+              onClick={() => handleStartTimer()}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg shadow-md font-bold text-xs tracking-wide transition active:scale-[0.98] flex items-center justify-center gap-2"
             >
               <span>▶</span> START TIMER
@@ -588,8 +636,19 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
                   className="w-full border border-slate-200 rounded p-2 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none h-20 resize-none bg-slate-50 text-slate-800 placeholder-slate-400"
                   placeholder={isBreakMode ? "Notes (Optional)" : "What did you work on? (Compulsory)"}
                   value={stopNotes}
-                  onChange={(e) => setStopNotes(e.target.value)}
+                  onChange={(e) => {
+                    setStopNotes(e.target.value);
+                    if (stopError) setStopError(''); // Clear error on type
+                  }}
                 />
+
+                {/* INLINE ERROR MESSAGE - REPLACES ALERT */}
+                {stopError && (
+                  <div className="text-[10px] text-red-600 font-bold mt-1 animate-pulse">
+                    ⚠️ {stopError}
+                  </div>
+                )}
+
                 <div className="flex gap-2 mt-3 justify-end">
                   <button
                     type="button"

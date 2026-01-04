@@ -12,11 +12,20 @@ export default function MiniWidget() {
   useEffect(() => {
     if (ipcRenderer) {
       ipcRenderer.on('sync-widget-data', (_event: any, data: any) => {
-        setTaskName(data.task || 'No Active Task');
-        // If data.time is "00h 00m", we might want to keep it or format it. 
-        // Assuming backend sends formatted string, or we format it here.
-        setTime(data.time || '00:00:00');
         setIsRunning(data.isRunning);
+        setTime(data.time || '00:00:00');
+
+        // Smart Task Name Display
+        if (data.isRunning) {
+          setTaskName(data.task || 'No Active Task');
+        } else {
+          // STOPPED STATE
+          if (data.task && data.task !== 'No Active Task') {
+            setTaskName(`Resume: ${data.task}`);
+          } else {
+            setTaskName('Ready to Track');
+          }
+        }
       });
     }
   }, []);
