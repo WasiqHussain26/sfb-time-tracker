@@ -231,6 +231,37 @@ export class ReportsService {
     });
   }
 
+  async getPayrollReport(start: string, end: string) {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+
+    const users = await this.prisma.user.findMany({
+      include: {
+        timeSessions: {
+          where: { startTime: { gte: startDate, lte: endDate } }
+        }
+      }
+    });
+
+    return users.map(u => {
+      const totalSeconds = u.timeSessions.reduce((acc, s) => {
+        const duration = (s.endTime ? new Date(s.endTime).getTime() : new Date().getTime()) - new Date(s.startTime).getTime();
+        return acc + Math.floor(duration / 1000);
+      }, 0);
+
+      return {
+        id: u.id,
+        name: u.name || 'Unknown',
+        role: u.role,
+        email: u.email,
+        totalSeconds: totalSeconds,
+        hourlyRate: Number(u.hourlyRate) || 0
+      };
+    });
+  }
+
   async getDailyTimeline(date: string) {
     const start = startOfDay(new Date(date));
     const end = endOfDay(new Date(date));
