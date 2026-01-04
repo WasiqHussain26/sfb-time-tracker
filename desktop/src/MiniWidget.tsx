@@ -5,77 +5,132 @@ const electron = window.require ? window.require('electron') : null;
 const ipcRenderer = electron ? electron.ipcRenderer : null;
 
 export default function MiniWidget() {
-  const [taskName, setTaskName] = useState('Default Task');
-  const [time, setTime] = useState('00h 00m');
+  const [taskName, setTaskName] = useState('Ready to Track');
+  const [time, setTime] = useState('00:00:00');
   const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
     if (ipcRenderer) {
       ipcRenderer.on('sync-widget-data', (_event: any, data: any) => {
         setTaskName(data.task || 'No Active Task');
-        setTime(data.time || '00h 00m');
+        // If data.time is "00h 00m", we might want to keep it or format it. 
+        // Assuming backend sends formatted string, or we format it here.
+        setTime(data.time || '00:00:00');
         setIsRunning(data.isRunning);
       });
     }
   }, []);
 
   const handleToggle = () => { if (ipcRenderer) ipcRenderer.send('widget-toggle-timer'); };
+  
   const handleBreak = () => { 
     if (ipcRenderer) {
-        // We tell main window to expand and show the break modal
         ipcRenderer.send('expand-main-window');
-        // Small delay to ensure window is visible before triggering event
         setTimeout(() => ipcRenderer.send('trigger-timer-toggle'), 100); 
     }
   };
+  
   const handleExpand = () => { if (ipcRenderer) ipcRenderer.send('expand-main-window'); };
   const handleHide = () => { if (ipcRenderer) ipcRenderer.send('hide-widget'); };
 
   return (
-    <div className="h-screen w-screen bg-[#f3f4f6] flex items-center justify-between px-3 border border-gray-400 select-none overflow-hidden">
-      <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'drag' } as any}>
-        <div className="cursor-move text-gray-500">
-           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M19 9l3 3-3 3M15 19l-3 3-3-3M2 12h20M12 2v20"/></svg>
-        </div>
-        <div className="w-8 h-8 bg-black rounded flex items-center justify-center cursor-pointer hover:opacity-80 transition" onClick={handleExpand} style={{ WebkitAppRegion: 'no-drag' } as any}>
-          <span className="text-blue-500 font-bold text-sm">SF</span>
-        </div>
+    // MAIN CONTAINER: No Scroll, Fixed Size, "Capsule" look
+    <div className="h-screen w-screen bg-slate-900 text-white flex items-center pr-2 pl-0 overflow-hidden select-none border border-slate-700 shadow-2xl">
+      
+      {/* 1. DRAG HANDLE (Left Stripe) */}
+      <div 
+        className="h-full w-6 bg-slate-800 hover:bg-slate-700 cursor-move flex flex-col items-center justify-center gap-0.5 border-r border-slate-700 transition"
+        style={{ WebkitAppRegion: 'drag' } as any}
+        title="Drag to move"
+      >
+        <div className="w-0.5 h-0.5 bg-slate-500 rounded-full"></div>
+        <div className="w-0.5 h-0.5 bg-slate-500 rounded-full"></div>
+        <div className="w-0.5 h-0.5 bg-slate-500 rounded-full"></div>
+        <div className="w-0.5 h-0.5 bg-slate-500 rounded-full"></div>
+        <div className="w-0.5 h-0.5 bg-slate-500 rounded-full"></div>
       </div>
 
-      <div className="flex-1 px-4 flex flex-col justify-center overflow-hidden">
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-bold uppercase ${isRunning ? 'text-green-600' : 'text-gray-500'}`}>
-              {isRunning ? 'Tracking' : 'Stopped'}
-            </span>
+      {/* 2. MAIN CONTENT AREA */}
+      <div className="flex-1 flex flex-col justify-center px-3 min-w-0" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          {/* Status & Name */}
+          <div className="flex items-center gap-2 mb-0.5">
+             <div className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`}></div>
+             <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 truncate">
+               {isRunning ? 'Running' : 'Paused'}
+             </span>
           </div>
-          <div className="text-sm font-semibold text-gray-800 truncate cursor-pointer" onClick={handleExpand}>
+          
+          {/* Task Name (Truncated) */}
+          <div 
+            className="text-xs font-semibold text-slate-200 truncate cursor-pointer hover:text-blue-400 transition" 
+            onClick={handleExpand}
+            title={taskName}
+          >
             {taskName}
           </div>
       </div>
 
-      <div className="font-mono font-bold text-gray-900 text-lg mr-4">
+      {/* 3. TIME DISPLAY (Monospace) */}
+      <div 
+        className={`font-mono font-bold text-lg mr-4 tracking-tight ${isRunning ? 'text-white' : 'text-slate-500'}`}
+        style={{ WebkitAppRegion: 'no-drag' } as any}
+      >
         {time}
       </div>
 
-      <div className="flex items-center gap-1">
+      {/* 4. ACTION BUTTONS */}
+      <div className="flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        
+        {/* Toggle Button */}
+        <button 
+          onClick={handleToggle}
+          className={`
+            w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition transform active:scale-95
+            ${isRunning 
+               ? 'bg-red-500 hover:bg-red-600 text-white' 
+               : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+            }
+          `}
+          title={isRunning ? "Stop Timer" : "Start Timer"}
+        >
+          {isRunning ? (
+            <span className="text-xs font-bold">■</span>
+          ) : (
+            <span className="text-xs font-bold ml-0.5">▶</span>
+          )}
+        </button>
+
+        {/* Break Button (Only when running) */}
         {isRunning && (
             <button 
                 onClick={handleBreak}
-                className="p-2 bg-orange-500 hover:bg-orange-600 text-white rounded-full transition shadow-sm"
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-orange-600 text-slate-400 hover:text-white border border-slate-700 transition flex items-center justify-center"
                 title="Take a Break"
             >
-                ☕
+                <span className="text-sm">☕</span>
             </button>
         )}
-        <button 
-          onClick={handleToggle}
-          className={`px-3 py-1.5 rounded text-white font-bold text-xs shadow transition ${isRunning ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
-        >
-          {isRunning ? 'Stop' : 'Start'}
-        </button>
 
-        <button onClick={handleHide} className="text-yellow-600 hover:text-yellow-700 text-xs font-bold px-2">
-          Hide
+        {/* Expand / Open App */}
+        <button 
+            onClick={handleExpand} 
+            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white border border-slate-700 transition flex items-center justify-center"
+            title="Open Main Window"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+        </button>
+        
+        {/* Close/Hide Widget */}
+        <button 
+            onClick={handleHide} 
+            className="w-6 h-6 flex items-center justify-center text-slate-600 hover:text-slate-300 transition ml-1"
+            title="Hide Widget"
+        >
+           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+           </svg>
         </button>
       </div>
     </div>

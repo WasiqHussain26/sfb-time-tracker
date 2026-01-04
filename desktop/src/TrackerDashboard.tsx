@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { uploadScreenshot } from './supabase';
 
@@ -47,9 +48,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
 
   // --- 1. INITIAL LOAD & LISTENERS ---
   useEffect(() => {
-    fetchProjects();
-    checkActiveSession();
-    fetchStats();
+    handleRefresh(); // Load everything on mount
 
     if (ipcRenderer) {
       // IDLE LISTENER
@@ -68,7 +67,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         }
       });
 
-      // UPDATE LISTENER (NEW)
+      // UPDATE LISTENER
       ipcRenderer.on('update_downloaded', () => {
         console.log("✨ Update Downloaded and Ready!");
         setIsUpdateReady(true);
@@ -87,9 +86,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
             headers: { Authorization: `Bearer ${token}` }
           });
 
-          if (res.status === 401 || res.status === 403) {
-            return;
-          }
+          if (res.status === 401 || res.status === 403) return;
 
           const data = await res.json();
           if (data.status === 'DISABLED') {
@@ -102,7 +99,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
 
       return () => {
         ipcRenderer.removeAllListeners('system-idle-status');
-        ipcRenderer.removeAllListeners('update_downloaded'); // Clean listener
+        ipcRenderer.removeAllListeners('update_downloaded');
         ipcRenderer.removeAllListeners('trigger-timer-toggle');
         clearInterval(heartbeatInterval);
       };
@@ -112,7 +109,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
   // --- 2. WIDGET SYNC ---
   useEffect(() => {
     if (ipcRenderer) {
-      const timeStr = activeSession ? formatTimerBig(elapsed) : '00h 00m';
+      const timeStr = activeSession ? formatTimerBig(elapsed) : '00:00:00';
       const taskName = activeSession?.task?.name || 'No Task';
 
       ipcRenderer.send('update-widget', {
@@ -179,7 +176,17 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     return () => clearTimeout(screenshotTimeout);
   }, [activeSession?.id]);
 
-  // --- 5. API CALLS ---
+  // --- 5. API CALLS (Data Fetching) ---
+  const handleRefresh = () => {
+    fetchProjects();
+    checkActiveSession();
+    fetchStats();
+    // CRITICAL FIX: Reload tasks for current project if selected
+    if (selectedProjectId) {
+      fetchTasksForProject(selectedProjectId);
+    }
+  };
+
   const fetchProjects = async () => {
     try {
       const res = await fetch(`${API_URL}/projects`, { headers: { Authorization: `Bearer ${token}` } });
@@ -187,6 +194,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
       const data = await res.json();
       if (Array.isArray(data)) {
         setProjects(data);
+        // Only auto-select if nothing selected
         if (data.length > 0 && !selectedProjectId) handleProjectChange(data[0].id);
       }
     } catch (e) { console.error(e); }
@@ -198,7 +206,10 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
       const data = await res.json();
       const myTasks = (data.tasks || []).filter((t: any) => t.isOpenToAll || t.assignees?.some((u: any) => u.id === user.id));
       setTasks(myTasks);
-      if (myTasks.length > 0 && !activeSession) setSelectedTaskId(myTasks[0].id);
+      // If we are refreshing and the current selected task is still in the list, keep it. 
+      // Otherwise default to first or empty.
+      // Logic handled by react state preservation usually, but good to be safe.
+      if (myTasks.length > 0 && !activeSession && !selectedTaskId) setSelectedTaskId(myTasks[0].id);
     } catch (e) { console.error(e); }
   };
 
@@ -249,23 +260,16 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
       await executeStop(`Auto-stopped due to inactivity (${AUTO_STOP_LIMIT_MINUTES}m limit).`);
       return;
     }
-
     setStopNotes('');
     setIsBreakMode(isBreak);
     setIsStopModalOpen(true);
   };
 
-  // --- NEW: HANDLE INSTALL UPDATE ---
   const handleInstallUpdate = async () => {
     setIsUpdating(true);
-
-    // 1. Stop Timer if running
     if (activeSession) {
-      // We use executeStop directly so we don't open the modal
       await executeStop("System Auto-Update: Timer stopped to apply updates.");
     }
-
-    // 2. Tell Main process to quit and install
     if (ipcRenderer) {
       ipcRenderer.send('install-update');
     }
@@ -273,7 +277,11 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
 
   const handleConfirmManualStop = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stopNotes.trim()) return alert("Notes are compulsory for documentation.");
+
+    // VALIDATION: Notes mandatory only if NOT break mode
+    if (!isBreakMode && !stopNotes.trim()) {
+      return alert("Notes are compulsory for documentation.");
+    }
 
     setStopLoading(true);
     const finalNote = isBreakMode ? `[BREAK] ${stopNotes}` : stopNotes;
@@ -320,137 +328,219 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
   };
 
   return (
-    <div className="h-screen flex flex-col bg-white text-gray-800 text-sm overflow-hidden select-none">
+    // THEME: BRAND BLUE (bg-blue-600)
+    <div className="h-screen w-full flex flex-col bg-blue-600 text-white font-sans select-none overflow-hidden">
 
-      {/* HEADER */}
-      <div className="bg-white border-b border-gray-300 p-2 flex justify-between items-center shadow-sm h-12">
-        <div className="flex items-center gap-2 text-blue-600 font-semibold cursor-pointer hover:underline" onClick={fetchStats}>
-          <span className="text-lg">↻</span>
-        </div>
-
-        {/* --- SHOW UPDATE BUTTON IF READY --- */}
-        {isUpdateReady ? (
-          <button
-            onClick={handleInstallUpdate}
-            disabled={isUpdating}
-            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-bold animate-pulse shadow-md transition"
-          >
-            {isUpdating ? 'UPDATING...' : '✨ UPDATE READY (CLICK ME)'}
-          </button>
-        ) : (
-          // Show User Info normally if no update
-          <div className="flex items-center gap-2 font-bold text-blue-600">
-            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs">
-              {user.name?.charAt(0)}
+      {/* 1. COMPACT HEADER (Transparent/Blue) */}
+      <div className="bg-blue-700/50 border-b border-blue-500/30 px-3 h-12 flex justify-between items-center shadow-sm z-20 shrink-0">
+        <div className="flex items-center gap-2">
+          {/* Avatar */}
+          <div className="w-7 h-7 bg-white text-blue-600 rounded-full flex items-center justify-center font-bold text-xs shadow-md">
+            {user.name?.charAt(0)}
+          </div>
+          <div>
+            <h2 className="text-xs font-bold text-white leading-tight">{user.name}</h2>
+            <div className="flex items-center gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${isSystemIdle ? 'bg-orange-300' : 'bg-green-300'} shadow-sm`}></span>
+              <span className="text-[9px] uppercase font-bold tracking-wider text-blue-100">
+                {isSystemIdle ? 'Idle' : 'Online'}
+              </span>
             </div>
-            {user.name}
           </div>
-        )}
-
-        <div className="flex gap-1">
-          <button onClick={onLogout} className="bg-[#4285f4] hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium transition">⏻</button>
-        </div>
-      </div>
-
-      {/* CONTROLS */}
-      <div className="p-4 space-y-4 border-b border-gray-200">
-        <div className="flex items-center">
-          <label className="w-20 text-right pr-3 text-gray-600 text-sm">Project</label>
-          <select value={selectedProjectId} onChange={(e) => handleProjectChange(e.target.value)} disabled={!!activeSession} className="flex-1 border border-gray-300 rounded px-2 py-1.5 bg-white text-gray-800 focus:border-blue-500 outline-none shadow-sm">
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </div>
-        <div className="flex items-center">
-          <label className="w-20 text-right pr-3 text-gray-600 text-sm">Task</label>
-          <select value={selectedTaskId} onChange={(e) => setSelectedTaskId(e.target.value)} disabled={!!activeSession} className="flex-1 border border-gray-300 rounded px-2 py-1.5 bg-white text-gray-800 focus:border-blue-500 outline-none shadow-sm">
-            {tasks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
         </div>
 
-        {!activeSession ? (
-          <button onClick={handleStartTimer} className="w-full bg-[#22c55e] hover:bg-[#16a34a] text-white font-bold text-lg py-3 rounded shadow transition transform active:scale-[0.99] flex justify-center items-center gap-2">
-            ▶ START TIMER
+        <div className="flex items-center gap-2">
+          {/* Update Button */}
+          {isUpdateReady && (
+            <button
+              onClick={handleInstallUpdate}
+              disabled={isUpdating}
+              className="bg-white text-blue-600 px-2 py-1 rounded-full text-[10px] font-bold animate-pulse shadow-sm transition flex items-center gap-1"
+            >
+              <span>✨</span>
+              {isUpdating ? '...' : 'UPDATE'}
+            </button>
+          )}
+
+          <button
+            onClick={handleRefresh}
+            className="p-1.5 text-blue-200 hover:text-white hover:bg-white/20 rounded-full transition"
+            title="Refresh Tasks"
+          >
+            <span className="text-base leading-none">↻</span>
           </button>
-        ) : (
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleStopTimer(false, true)}
-              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded shadow transition flex justify-center items-center gap-2"
-            >
-              ☕ BREAK
-            </button>
-            <button
-              onClick={() => handleStopTimer(false, false)}
-              className="flex-1 bg-[#ef4444] hover:bg-[#dc2626] text-white font-bold py-3 rounded shadow transition flex justify-center items-center gap-2"
-            >
-              STOP
-            </button>
-          </div>
-        )}
 
-        {/* ... Rest of stats ... */}
-        <div className="grid grid-cols-2 divide-x divide-gray-300 text-center py-2 bg-gray-50 border border-gray-200 rounded">
-          <div>
-            <div className="text-[10px] text-green-600 font-bold uppercase">Today</div>
-            <div className="text-xs font-bold text-gray-800">{formatTime(stats.day + elapsed)}</div>
+          <button onClick={onLogout} className="p-1.5 text-blue-200 hover:text-white hover:bg-white/20 rounded-full transition" title="Logout">
+            <span className="text-base leading-none">⏻</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. FIXED CONTROLS AREA (NO SCROLL) */}
+      <div className="p-3 space-y-3 shrink-0 z-10 relative">
+
+        {/* TIMER DISPLAY CARD - WHITE */}
+        <div className="bg-white rounded-xl p-3 shadow-xl relative overflow-hidden group">
+          {/* Gradient Line */}
+          {activeSession && <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500 animate-gradient-x"></div>}
+
+          <div className="flex justify-between items-end mb-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-0.5">Total Time</p>
+              <h1 className={`text-3xl font-mono font-bold tracking-tight ${activeSession ? 'text-blue-600' : 'text-slate-800'}`}>
+                {activeSession ? formatTimerBig(elapsed) : '00:00:00'}
+              </h1>
+            </div>
+            {activeSession && (
+              <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-600 text-[9px] font-bold rounded-full uppercase animate-pulse">
+                REC
+              </span>
+            )}
           </div>
+
+          {!activeSession ? (
+            <button
+              onClick={handleStartTimer}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg shadow-md font-bold text-xs tracking-wide transition active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <span>▶</span> START TIMER
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleStopTimer(false, true)}
+                className="flex-1 bg-orange-100 hover:bg-orange-200 text-orange-600 py-2.5 rounded-lg font-bold text-xs tracking-wide transition"
+              >
+                ☕ BREAK
+              </button>
+              <button
+                onClick={() => handleStopTimer(false, false)}
+                className="flex-1 bg-red-100 hover:bg-red-200 text-red-600 py-2.5 rounded-lg font-bold text-xs tracking-wide transition"
+              >
+                ■ STOP
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* SELECTORS ROW */}
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <div className="text-[10px] text-gray-600 font-bold uppercase">Week Total</div>
-            <div className="text-xs font-bold text-gray-800">{formatTime(stats.week + (stats.day + elapsed))}</div>
+            <label className="block text-[10px] font-bold text-blue-100 uppercase mb-1 ml-1">Project</label>
+            <div className="relative">
+              <select
+                value={selectedProjectId}
+                onChange={(e) => handleProjectChange(e.target.value)}
+                disabled={!!activeSession}
+                className="w-full appearance-none bg-white text-slate-800 border-none text-xs rounded-lg pl-3 pr-6 py-2.5 focus:outline-none focus:ring-2 focus:ring-white/50 shadow-md transition"
+              >
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-blue-100 uppercase mb-1 ml-1">Task</label>
+            <div className="relative">
+              <select
+                value={selectedTaskId}
+                onChange={(e) => setSelectedTaskId(e.target.value)}
+                disabled={!!activeSession}
+                className="w-full appearance-none bg-white text-slate-800 border-none text-xs rounded-lg pl-3 pr-6 py-2.5 focus:outline-none focus:ring-2 focus:ring-white/50 shadow-md transition"
+              >
+                {tasks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* STATS STRIP - WHITE */}
+        <div className="flex divide-x divide-slate-100 bg-white rounded-lg shadow-md">
+          <div className="flex-1 py-2 text-center">
+            <div className="text-[9px] uppercase font-bold text-slate-400">Today</div>
+            <div className="text-xs font-bold text-slate-800">{formatTime(stats.day + elapsed)}</div>
+          </div>
+          <div className="flex-1 py-2 text-center">
+            <div className="text-[9px] uppercase font-bold text-slate-400">Week</div>
+            <div className="text-xs font-bold text-slate-800">{formatTime(stats.week + (stats.day + elapsed))}</div>
           </div>
         </div>
       </div>
 
-      {/* RECENT TASKS */}
-      <div className="flex-1 bg-[#f0f2f5] flex flex-col overflow-hidden">
-        <div className="px-3 py-2 flex items-center justify-between text-blue-500 font-semibold bg-white border-b border-gray-200">
-          <div className="flex items-center gap-1 cursor-pointer"><span>★</span> Recent Tasks</div>
-          <div className="flex items-center gap-1 text-gray-600 font-normal">
-            <span>Status:</span>
-            <span className={`font-bold ${isSystemIdle ? 'text-orange-500' : 'text-green-600'}`}>
-              {isSystemIdle ? 'Away' : 'Online'}
-            </span>
-          </div>
+      {/* 3. SCROLLABLE RECENT TASKS */}
+      <div className="flex-1 flex flex-col bg-white rounded-t-2xl min-h-0 shadow-[0_-4px_20px_rgba(0,0,0,0.2)] mx-2 mb-0 overflow-hidden">
+        <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 shrink-0">
+          <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+            <span className="text-blue-500">★</span> Recent Tasks
+          </h3>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-white">
+        <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden p-1">
+          {tasks.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-slate-400 text-xs">
+              <p>No recent tasks</p>
+            </div>
+          )}
           {tasks.map(t => (
-            <div key={t.id} className="p-2 border-b border-gray-100 px-3 py-2 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition" onClick={() => { if (!activeSession) setSelectedTaskId(t.id) }}>
-              <div>
-                <div className="text-xs text-gray-500 flex items-center gap-1">
-                  {projects.find(p => p.id === selectedProjectId)?.name} <span className="text-[8px]">▶</span>
+            <div
+              key={t.id}
+              onClick={() => { if (!activeSession) setSelectedTaskId(t.id) }}
+              className={`px-3 py-2.5 mb-1 rounded-lg cursor-pointer transition flex justify-between items-center group
+                        ${selectedTaskId === t.id.toString() ? 'bg-blue-50 ring-1 ring-blue-100' : 'hover:bg-slate-50'}
+                    `}
+            >
+              <div className="min-w-0">
+                <div className="text-[9px] font-bold text-slate-400 mb-0.5 truncate group-hover:text-slate-500 transition-colors">
+                  {projects.find(p => p.id === selectedProjectId)?.name}
                 </div>
-                <div className="text-sm font-semibold text-gray-800">{t.name}</div>
+                <div className={`text-xs font-medium truncate ${selectedTaskId === t.id.toString() ? 'text-blue-600' : 'text-slate-700'}`}>
+                  {t.name}
+                </div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* --- STOP TIMER NOTES MODAL --- */}
+      {/* 4. MODAL OVERLAY */}
       {isStopModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-          <div className="bg-white p-5 rounded-lg w-[90%] max-w-sm shadow-2xl">
-            <h3 className="text-lg font-bold text-gray-800 mb-2">{isBreakMode ? 'Take a Break' : 'Stop Session'}</h3>
-            <p className="text-xs text-gray-500 mb-3">
-              {isBreakMode ? 'Notes are compulsory to start a break.' : 'Please describe what you worked on.'}
-            </p>
-            <form onSubmit={handleConfirmManualStop}>
-              <textarea
-                className="w-full border border-gray-300 rounded p-2 text-sm focus:border-blue-500 outline-none h-24 resize-none bg-white text-gray-800"
-                placeholder={isBreakMode ? "e.g. Washroom, Phone call, Tea break..." : "e.g. Fixed navigation bug..."}
-                value={stopNotes}
-                onChange={(e) => setStopNotes(e.target.value)}
-                required
-                autoFocus
-              />
-              <div className="flex gap-2 mt-4 justify-end">
-                <button type="button" onClick={() => setIsStopModalOpen(false)} className="px-3 py-2 text-gray-500 hover:bg-gray-100 rounded text-xs font-bold">CANCEL</button>
-                <button type="submit" disabled={stopLoading} className={`px-4 py-2 rounded text-white text-xs font-bold ${isBreakMode ? 'bg-orange-600 hover:bg-orange-700' : 'bg-red-600 hover:bg-red-700'}`}>
-                  {stopLoading ? 'SAVING...' : (isBreakMode ? 'START BREAK' : 'STOP TIMER')}
-                </button>
-              </div>
-            </form>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-blue-900/40 backdrop-blur-sm" />
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-[280px] relative z-10 overflow-hidden animate-scale-in">
+
+            <div className={`p-3 ${isBreakMode ? 'bg-orange-50' : 'bg-red-50'} border-b ${isBreakMode ? 'border-orange-100' : 'border-red-100'}`}>
+              <h3 className={`text-sm font-bold ${isBreakMode ? 'text-orange-800' : 'text-red-800'}`}>
+                {isBreakMode ? 'Take a Break' : 'Stop Session'}
+              </h3>
+            </div>
+
+            <div className="p-3">
+              <form onSubmit={handleConfirmManualStop}>
+                <textarea
+                  className="w-full border border-slate-200 rounded p-2 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none h-20 resize-none bg-slate-50 text-slate-800 placeholder-slate-400"
+                  placeholder={isBreakMode ? "Notes (Optional)" : "What did you work on? (Compulsory)"}
+                  value={stopNotes}
+                  onChange={(e) => setStopNotes(e.target.value)}
+                  autoFocus
+                />
+                <div className="flex gap-2 mt-3 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsStopModalOpen(false)}
+                    className="px-3 py-2 text-slate-500 hover:bg-slate-100 rounded text-[10px] font-bold transition"
+                  >
+                    CANCEL
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={stopLoading}
+                    className={`px-4 py-2 rounded text-white text-[10px] font-bold shadow-sm transition active:scale-95 ${isBreakMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-red-600 hover:bg-red-700'}`}
+                  >
+                    {stopLoading ? '...' : (isBreakMode ? 'BREAK' : 'STOP')}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

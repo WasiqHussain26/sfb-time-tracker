@@ -9,7 +9,7 @@ export default function ProjectDetailsPage() {
   const [project, setProject] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [userRole, setUserRole] = useState('');
-  
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<any>(null); // Null = Create Mode, Object = Edit Mode
@@ -25,16 +25,21 @@ export default function ProjectDetailsPage() {
   const fetchData = async () => {
     try {
       const userStr = localStorage.getItem('user');
+      const token = localStorage.getItem('token');
+
       if (userStr) {
         const u = JSON.parse(userStr);
         setUserRole(u.role);
       }
 
-      const resProject = await fetch(`https://sfb-backend.vercel.app/projects/${projectId}`);
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const resProject = await fetch(`https://sfb-backend.vercel.app/projects/${projectId}`, { headers });
       const dataProject = await resProject.json();
       setProject(dataProject);
 
-      const resUsers = await fetch('https://sfb-backend.vercel.app/users');
+      const resUsers = await fetch('https://sfb-backend.vercel.app/users', { headers });
       const dataUsers = await resUsers.json();
       setUsers(Array.isArray(dataUsers) ? dataUsers : []);
     } catch (err) {
@@ -72,10 +77,10 @@ export default function ProjectDetailsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const url = editingTask 
+      const url = editingTask
         ? `https://sfb-backend.vercel.app/tasks/${editingTask.id}` // Patch URL
         : 'https://sfb-backend.vercel.app/tasks';                  // Post URL
-      
+
       const method = editingTask ? 'PATCH' : 'POST';
 
       const body = {
@@ -142,9 +147,8 @@ export default function ProjectDetailsPage() {
             Managed by: {project.managers?.map((m: any) => m.name).join(', ') || 'None'}
           </p>
         </div>
-        <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-            project.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-        }`}>
+        <span className={`px-3 py-1 rounded-full text-sm font-bold ${project.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+          }`}>
           {project.status}
         </span>
       </div>
@@ -153,10 +157,10 @@ export default function ProjectDetailsPage() {
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-bold text-gray-700">Tasks</h3>
-          
+
           {/* ADD TASK BUTTON (EMPLOYER ONLY) */}
           {canEdit && (
-            <button 
+            <button
               onClick={() => openModal(null)} // Pass null for Create Mode
               className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
             >
@@ -169,7 +173,7 @@ export default function ProjectDetailsPage() {
           <ul className="space-y-3">
             {project.tasks.map((task: any) => (
               <li key={task.id} className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition flex justify-between items-center">
-                
+
                 {/* Left Side: Name & Assignees */}
                 <div>
                   <p className="font-semibold text-gray-800 text-lg">{task.name}</p>
@@ -185,17 +189,15 @@ export default function ProjectDetailsPage() {
                 {/* Right Side: Actions (Status, Edit, Delete) */}
                 <div className="flex items-center gap-3">
                   {/* Status Dropdown */}
-                  <select 
+                  <select
                     value={task.status}
                     onChange={(e) => handleStatusChange(task.id, e.target.value)}
                     disabled={!canEdit}
-                    className={`px-2 py-1 text-xs rounded border font-medium focus:outline-none ${
-                      !canEdit ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
-                    } ${
-                      task.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border-green-200' :
-                      task.status === 'COMPLETED' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                      'bg-red-50 text-red-700 border-red-200'
-                    }`}
+                    className={`px-2 py-1 text-xs rounded border font-medium focus:outline-none ${!canEdit ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'
+                      } ${task.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border-green-200' :
+                        task.status === 'COMPLETED' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                          'bg-red-50 text-red-700 border-red-200'
+                      }`}
                   >
                     <option value="ACTIVE">ACTIVE</option>
                     <option value="COMPLETED">COMPLETED</option>
@@ -205,13 +207,13 @@ export default function ProjectDetailsPage() {
                   {/* EDIT & DELETE (EMPLOYER ONLY) */}
                   {canEdit && (
                     <>
-                      <button 
+                      <button
                         onClick={() => openModal(task)}
                         className="text-blue-600 hover:text-blue-800 text-sm font-medium px-2"
                       >
                         Edit
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleDelete(task.id)}
                         className="text-red-600 hover:text-red-800 text-sm font-medium px-2"
                       >
@@ -237,28 +239,28 @@ export default function ProjectDetailsPage() {
             <h3 className="text-xl font-bold mb-4 text-gray-800">
               {editingTask ? 'Edit Task' : 'Add New Task'}
             </h3>
-            
+
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Task Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Task Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   required
                   className="w-full border rounded px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g. Frontend Development"
                 />
               </div>
 
               {/* Open to All Toggle */}
               <div className="flex items-center gap-2 bg-gray-50 p-3 rounded border">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   id="openToAll"
                   checked={formData.isOpenToAll}
-                  onChange={(e) => setFormData({...formData, isOpenToAll: e.target.checked})}
+                  onChange={(e) => setFormData({ ...formData, isOpenToAll: e.target.checked })}
                   className="w-4 h-4 text-blue-600 cursor-pointer"
                 />
                 <label htmlFor="openToAll" className="text-sm text-gray-700 cursor-pointer select-none font-medium">
@@ -274,7 +276,7 @@ export default function ProjectDetailsPage() {
                     {users.length === 0 && <p className="text-xs text-gray-400 p-2">No users found.</p>}
                     {users.map((user) => (
                       <div key={user.id} className="flex items-center gap-2 mb-1 p-1 hover:bg-gray-50 rounded transition">
-                        <input 
+                        <input
                           type="checkbox"
                           id={`u-${user.id}`}
                           checked={formData.assigneeIds.includes(user.id)}
@@ -292,15 +294,15 @@ export default function ProjectDetailsPage() {
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-2 mt-6 border-t pt-4">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded transition"
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition font-medium"
                 >
                   {editingTask ? 'Save Changes' : 'Create Task'}
