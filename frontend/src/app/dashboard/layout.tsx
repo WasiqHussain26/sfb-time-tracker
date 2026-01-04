@@ -1,5 +1,5 @@
 import Sidebar from '@/components/Sidebar';
-import AuthGuard from '@/components/AuthGuard'; // <--- Import the Guard we created
+import AuthGuard from '@/components/AuthGuard';
 
 export default function DashboardLayout({
   children,
@@ -7,18 +7,13 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    /* We wrap the entire dashboard in AuthGuard.
-      If the user is NOT logged in, AuthGuard will redirect them 
-      and render nothing (or a loading spinner), protecting the 
-      Sidebar and Content from being seen.
-    */
     <AuthGuard>
-      <div className="flex min-h-screen bg-gray-50">
-        {/* Sidebar stays fixed on the left */}
+      <div className="flex min-h-screen bg-[#F8FAFC]">
+        {/* Sidebar is fixed, so we don't need to wrap it here, it handles its own positioning */}
         <Sidebar />
         
-        {/* Main Content Area */}
-        <main className="flex-1 p-8 overflow-y-auto">
+        {/* FIX: added 'ml-64' to push content right, so it doesn't go behind sidebar */}
+        <main className="flex-1 ml-64 p-8 overflow-y-auto w-full relative">
           {children}
         </main>
       </div>

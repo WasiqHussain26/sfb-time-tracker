@@ -2,80 +2,53 @@
 import { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, startOfWeek, addDays, addMonths, subMonths } from 'date-fns';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+
+const Icons = {
+  Cash: () => <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  ArrowLeft: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>,
+  ArrowRight: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
+  Download: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+};
 
 export default function PayrollPage() {
-  // State
   const [payrollData, setPayrollData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-  
   const router = useRouter();
 
-  // Filters
   const [filterType, setFilterType] = useState<'CUSTOM' | 'MONTH' | 'WEEK_MF' | 'WEEK_SS'>('CUSTOM');
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
 
-  // 1. Init User ID
   useEffect(() => {
     const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const u = JSON.parse(userStr);
-      setCurrentUserId(Number(u.id));
-    }
+    if (userStr) setCurrentUserId(Number(JSON.parse(userStr).id));
   }, []);
 
-  // 2. Fetch Data
   useEffect(() => {
     const fetchData = async () => {
       const token = localStorage.getItem('token');
-      if (!token) { router.push('/login'); return; } // Redirect if no token
+      if (!token) { router.push('/login'); return; }
 
-      setLoading(true);
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/payroll?start=${startDate}&end=${endDate}`, {
-             headers: { Authorization: `Bearer ${token}` } // <--- ADDED HEADER
-        });
-
-        if (res.status === 401) {
-            router.push('/login');
-            return;
-        }
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/payroll?start=${startDate}&end=${endDate}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.status === 401) { router.push('/login'); return; }
 
         const data = await res.json();
+        if (!Array.isArray(data)) { setPayrollData([]); return; }
         
-        // SAFETY CHECK: Ensure data is an array
-        if (!Array.isArray(data)) {
-            console.error("API Error:", data);
-            setPayrollData([]);
-            setLoading(false);
-            return;
-        }
-        
-        let formatted = data.map((u: any) => ({
-          ...u,
-          currentRate: u.hourlyRate, 
-          currency: 'USD'            
-        }));
-
-        if (currentUserId) {
-          formatted = formatted.filter((u: any) => u.id !== currentUserId);
-        }
+        let formatted = data.map((u: any) => ({ ...u, currentRate: u.hourlyRate, currency: 'USD' }));
+        if (currentUserId) formatted = formatted.filter((u: any) => u.id !== currentUserId);
         
         setPayrollData(formatted);
       } catch (err) { console.error(err); setPayrollData([]); }
-      setLoading(false);
     };
-
-    if (currentUserId) { 
-        fetchData();
-    }
+    if (currentUserId) fetchData();
   }, [startDate, endDate, currentUserId]);
 
   const handleRateChange = (id: number, newRate: string) => {
     setPayrollData(prev => prev.map(u => u.id === id ? { ...u, currentRate: newRate } : u));
   };
-
   const handleCurrencyChange = (id: number, newCurrency: string) => {
     setPayrollData(prev => prev.map(u => u.id === id ? { ...u, currency: newCurrency } : u));
   };
@@ -99,33 +72,25 @@ export default function PayrollPage() {
 
   const shiftDate = (direction: 'PREV' | 'NEXT') => {
     const start = new Date(startDate);
-    const method = filterType === 'MONTH' ? (direction === 'NEXT' ? addMonths : subMonths) : addDays;
-    const amount = filterType === 'MONTH' ? 1 : (direction === 'NEXT' ? 7 : -7);
-    
+    const days = direction === 'NEXT' ? (filterType === 'MONTH' ? 30 : 7) : (filterType === 'MONTH' ? -30 : -7);
     if(filterType === 'MONTH') {
-      const newDate = method(start, 1);
+      const newDate = direction === 'NEXT' ? addMonths(start, 1) : subMonths(start, 1);
       setStartDate(format(startOfMonth(newDate), 'yyyy-MM-dd'));
       setEndDate(format(endOfMonth(newDate), 'yyyy-MM-dd'));
     } else {
-      setStartDate(format(addDays(new Date(startDate), amount), 'yyyy-MM-dd'));
-      setEndDate(format(addDays(new Date(endDate), amount), 'yyyy-MM-dd'));
+      setStartDate(format(addDays(new Date(startDate), days), 'yyyy-MM-dd'));
+      setEndDate(format(addDays(new Date(endDate), days), 'yyyy-MM-dd'));
     }
   };
 
   const downloadCSV = () => {
     let csv = "Name,Role,Total Time (Hours),Total Time (Format),Hourly Rate,Currency,Total Pay,Email\n";
-
     payrollData.forEach(user => {
-      const hoursDecimal = (user.totalSeconds / 3600).toFixed(2);
-      const hoursFormat = formatDuration(user.totalSeconds);
       const totalPay = ((user.totalSeconds / 3600) * user.currentRate).toFixed(2);
-
-      csv += `${user.name},${user.role},${hoursDecimal},${hoursFormat},${user.currentRate},${user.currency},${totalPay},${user.email}\n`;
+      csv += `${user.name},${user.role},${(user.totalSeconds / 3600).toFixed(2)},${formatDuration(user.totalSeconds)},${user.currentRate},${user.currency},${totalPay},${user.email}\n`;
     });
-
-    const encodedUri = encodeURI("data:text/csv;charset=utf-8," + csv);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + csv));
     link.setAttribute("download", `payroll_report_${startDate}_${endDate}.csv`);
     document.body.appendChild(link);
     link.click();
@@ -139,92 +104,104 @@ export default function PayrollPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-800">Generate Payroll</h2>
-
-      {/* FILTERS */}
-      <div className="bg-white p-4 rounded shadow-sm border border-gray-200 flex flex-wrap gap-4 items-center justify-between">
-        <div className="flex items-center gap-3 bg-gray-50 p-1 rounded border">
-          {['CUSTOM', 'MONTH', 'WEEK_MF', 'WEEK_SS'].map((type: any) => (
-            <button key={type} onClick={() => handleFilterChange(type)} className={`px-3 py-1 text-sm rounded ${filterType === type ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500'}`}>
-              {type.replace('_', ' ')}
-            </button>
-          ))}
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {filterType !== 'CUSTOM' && <button onClick={() => shiftDate('PREV')} className="p-1 hover:text-blue-600">◀</button>}
-          <input type="date" className="border rounded px-2 py-1 text-sm" value={startDate} onChange={(e) => {setStartDate(e.target.value); setFilterType('CUSTOM');}} />
-          <span className="text-gray-400">to</span>
-          <input type="date" className="border rounded px-2 py-1 text-sm" value={endDate} onChange={(e) => {setEndDate(e.target.value); setFilterType('CUSTOM');}} />
-          {filterType !== 'CUSTOM' && <button onClick={() => shiftDate('NEXT')} className="p-1 hover:text-blue-600">▶</button>}
-        </div>
+    <div className="min-h-screen bg-[#F8FAFC] p-8 font-sans">
+      
+      {/* HEADER */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-900">Payroll Calculation</h1>
+        <p className="text-slate-500 mt-1">Calculate and export team payments based on tracked hours.</p>
       </div>
 
-      {/* DOWNLOAD */}
-      <div className="flex justify-start">
-        <button onClick={downloadCSV} className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2">
-          <span>⬇</span> Download Payroll
+      {/* CONTROLS */}
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-8 flex flex-wrap items-center gap-6">
+        <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+           {['MONTH', 'WEEK_MF', 'WEEK_SS', 'CUSTOM'].map((type: any) => (
+             <button key={type} onClick={() => handleFilterChange(type)} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${filterType === type ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                {type === 'WEEK_MF' ? 'Mon-Fri' : type === 'WEEK_SS' ? 'Sat-Sun' : type === 'MONTH' ? 'Month' : 'Custom'}
+             </button>
+           ))}
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
+           {filterType !== 'CUSTOM' && <button onClick={() => shiftDate('PREV')} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-blue-600 transition"><Icons.ArrowLeft /></button>}
+           <div className="flex items-center border border-slate-200 rounded-lg bg-white px-3 py-2 shadow-sm gap-2">
+                 <span className="text-xs font-bold text-slate-400 uppercase">Range:</span>
+                 <input type="date" className="text-sm font-medium text-slate-700 outline-none w-32" value={startDate} onChange={(e) => { setStartDate(e.target.value); setFilterType('CUSTOM'); }} />
+                 <span className="text-slate-300">→</span>
+                 <input type="date" className="text-sm font-medium text-slate-700 outline-none w-32" value={endDate} onChange={(e) => { setEndDate(e.target.value); setFilterType('CUSTOM'); }} />
+           </div>
+           {filterType !== 'CUSTOM' && <button onClick={() => shiftDate('NEXT')} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-blue-600 transition"><Icons.ArrowRight /></button>}
+        </div>
+        <div className="w-full h-px bg-slate-100 md:hidden" />
+        <button onClick={downloadCSV} className="ml-auto md:ml-0 bg-slate-900 text-white px-6 py-2.5 rounded-xl hover:bg-slate-800 font-bold shadow-lg shadow-slate-200 transition-all flex items-center gap-2">
+           <Icons.Download /> Export CSV
         </button>
       </div>
 
-      {/* TABLE */}
-      <div className="bg-white rounded shadow border border-gray-200 overflow-hidden">
+      {/* PAYROLL GRID */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <table className="w-full text-left">
-          <thead className="bg-gray-50 border-b">
+          <thead className="bg-slate-50/80 border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wider font-bold">
             <tr>
-              <th className="px-6 py-4 font-semibold text-gray-700 text-sm">Name</th>
-              <th className="px-6 py-4 font-semibold text-gray-700 text-sm">Role</th>
-              <th className="px-6 py-4 font-semibold text-gray-700 text-sm">Total Time</th>
-              <th className="px-6 py-4 font-semibold text-gray-700 text-sm">Hourly Rate</th>
-              <th className="px-6 py-4 font-semibold text-gray-700 text-sm">Currency</th>
-              <th className="px-6 py-4 font-semibold text-gray-700 text-sm text-right">Total Pay</th>
+              <th className="px-6 py-4">Employee</th>
+              <th className="px-6 py-4">Total Time</th>
+              <th className="px-6 py-4">Configured Rate</th>
+              <th className="px-6 py-4 text-right">Calculated Pay</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {payrollData.map((user) => (
-              <tr key={user.id} className="hover:bg-gray-50 transition">
-                <td className="px-6 py-4 font-medium text-gray-900">{user.name}</td>
-                <td className="px-6 py-4 text-xs">
-                   <span className={`px-2 py-1 rounded font-bold ${
-                      user.role === 'ADMIN' ? 'bg-red-100 text-red-700' :
-                      user.role === 'EMPLOYER' ? 'bg-purple-100 text-purple-700' :
-                      'bg-green-100 text-green-700'
-                   }`}>{user.role}</span>
-                </td>
-                <td className="px-6 py-4 font-mono text-gray-600">
-                  {formatDuration(user.totalSeconds)}
-                </td>
-                
+          <tbody className="divide-y divide-slate-50 text-sm">
+            {payrollData.length > 0 ? payrollData.map((user, i) => (
+              <motion.tr 
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                key={user.id} 
+                className="hover:bg-blue-50/30 transition-colors"
+              >
                 <td className="px-6 py-4">
-                  <input 
-                    type="number" 
-                    value={user.currentRate}
-                    onChange={(e) => handleRateChange(user.id, e.target.value)}
-                    className="border border-gray-300 rounded px-2 py-1 w-24 text-right focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
+                    <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${
+                            user.role === 'ADMIN' ? 'bg-purple-500' : 'bg-blue-500'
+                        }`}>
+                            {user.name.charAt(0)}
+                        </div>
+                        <div>
+                            <div className="font-bold text-slate-700">{user.name}</div>
+                            <div className="text-[10px] text-slate-400 uppercase font-bold">{user.role}</div>
+                        </div>
+                    </div>
                 </td>
-
                 <td className="px-6 py-4">
-                  <select 
-                    value={user.currency}
-                    onChange={(e) => handleCurrencyChange(user.id, e.target.value)}
-                    className="border border-gray-300 rounded px-2 py-1 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                  >
-                    <option value="USD">USD</option>
-                    <option value="PKR">PKR</option>
-                    <option value="EUR">EUR</option>
-                    <option value="GBP">GBP</option>
-                  </select>
+                    <div className="font-mono font-bold text-slate-700">{formatDuration(user.totalSeconds)}</div>
+                    <div className="text-xs text-slate-400">{(user.totalSeconds / 3600).toFixed(2)} hrs</div>
                 </td>
-
-                <td className="px-6 py-4 text-right font-bold text-gray-800">
-                  {user.currency} {((user.totalSeconds / 3600) * user.currentRate).toFixed(2)}
+                <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                        <select 
+                            value={user.currency}
+                            onChange={(e) => handleCurrencyChange(user.id, e.target.value)}
+                            className="bg-slate-100 border border-slate-200 rounded px-2 py-1 text-xs font-bold text-slate-600 outline-none cursor-pointer"
+                        >
+                            <option value="USD">USD</option>
+                            <option value="PKR">PKR</option>
+                            <option value="EUR">EUR</option>
+                            <option value="GBP">GBP</option>
+                        </select>
+                        <input 
+                            type="number" 
+                            value={user.currentRate}
+                            onChange={(e) => handleRateChange(user.id, e.target.value)}
+                            className="w-20 bg-white border border-slate-200 rounded px-2 py-1 text-slate-700 outline-none focus:border-blue-500 font-mono text-sm"
+                        />
+                    </div>
                 </td>
-              </tr>
-            ))}
-            {payrollData.length === 0 && !loading && (
-              <tr><td colSpan={6} className="p-8 text-center text-gray-500">No employees found.</td></tr>
+                <td className="px-6 py-4 text-right">
+                    <span className="bg-green-50 text-green-700 font-mono font-bold px-3 py-1.5 rounded-lg border border-green-100 shadow-sm block w-fit ml-auto">
+                        {user.currency} {((user.totalSeconds / 3600) * user.currentRate).toFixed(2)}
+                    </span>
+                </td>
+              </motion.tr>
+            )) : (
+                <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No payroll data available for this criteria.</td></tr>
             )}
           </tbody>
         </table>

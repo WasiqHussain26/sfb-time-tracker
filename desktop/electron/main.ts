@@ -84,23 +84,30 @@ function createWindows() {
   }, 1000);
 
   // --- AUTO UPDATER LOGIC ---
+  // --- AUTO UPDATER LOGIC ---
   if (app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify();
+    // 1. Silent Check (No default notifications)
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = false; // Disable "On Quit" because it's looping
+    autoUpdater.checkForUpdates();
   }
 
   autoUpdater.on('update-available', () => {
-    mainWindow?.webContents.send('update_available');
+    // Optional: could notify frontend "Downloading..."
+    console.log("Update available, downloading...");
   });
 
-  // --- CHANGED: Don't show dialog, just notify Frontend ---
+  // 2. Notify Frontend when ready
   autoUpdater.on('update-downloaded', () => {
+    console.log("Update downloaded!");
     mainWindow?.webContents.send('update_downloaded');
-    // REMOVED THE POPUP DIALOG HERE
   });
 
-  // --- NEW: Listen for "Install Now" command
+  // 3. FORCE INSTALL when user clicks button
   ipcMain.on('install-update', () => {
-    autoUpdater.quitAndInstall();
+    // true = silent install (no specific reason to be noisy)
+    // true = force run after
+    autoUpdater.quitAndInstall(false, true);
   });
 }
 
@@ -168,6 +175,13 @@ ipcMain.on('widget-toggle-timer', () => {
     mainWindow.webContents.send('trigger-timer-toggle');
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
+  }
+});
+
+ipcMain.on('widget-trigger-break', () => {
+  if (mainWindow) {
+    // Silent Break: Do not restore or focus
+    mainWindow.webContents.send('trigger-break-mode');
   }
 });
 

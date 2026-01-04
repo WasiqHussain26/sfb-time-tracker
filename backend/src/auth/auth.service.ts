@@ -10,11 +10,11 @@ import { LoginAuthDto } from './dto/login-auth.dto';
 @Injectable()
 export class AuthService {
   constructor(
-    private prisma: PrismaService, 
+    private prisma: PrismaService,
     private jwtService: JwtService,
     private usersService: UsersService, // <--- INJECT THIS
     private mailService: MailService    // <--- INJECT THIS
-  ) {}
+  ) { }
 
   // 1. REGISTER (Sign Up - For Employer/Owner)
   async register(createAuthDto: CreateAuthDto) {
@@ -49,17 +49,26 @@ export class AuthService {
       throw new ForbiddenException('Your account has been deactivated. Please contact your administrator.');
     }
 
+    // FIX: Automatically activate user if they are still 'INVITED'
+    if (user.status === 'INVITED') {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { status: 'ACTIVE' }
+      });
+      user.status = 'ACTIVE'; // Update local object for token payload
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload = { 
-      sub: user.id, 
-      email: user.email, 
-      role: user.role, 
-      name: user.name 
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name
     };
 
     return {
@@ -79,7 +88,7 @@ export class AuthService {
   async forgotPassword(email: string) {
     // Check if user exists using UsersService
     const user = await this.usersService.findByEmail(email);
-    
+
     // Security: Do not reveal if email doesn't exist. Just return success.
     if (!user) {
       return { message: 'If an account exists, a reset link has been sent.' };
@@ -103,7 +112,7 @@ export class AuthService {
     try {
       // Verify the token
       const payload = this.jwtService.verify(token);
-      
+
       // Update the user
       // Note: We pass the raw password because UsersService.update() now handles the hashing
       await this.usersService.update(payload.sub, { password: newPassword });

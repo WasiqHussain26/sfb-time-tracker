@@ -2,83 +2,62 @@
 import { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, startOfWeek, addDays, addMonths, subMonths } from 'date-fns';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// --- ICONS ---
+const Icons = {
+  User: () => <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
+  Calendar: () => <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  ArrowLeft: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>,
+  ArrowRight: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>,
+  Briefcase: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+  List: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+};
 
 export default function UserReportPage() {
-  // --- STATE ---
   const [users, setUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<string>('');
   
-  // Date Filters
   const [filterType, setFilterType] = useState<'CUSTOM' | 'MONTH' | 'WEEK_MF' | 'WEEK_SS'>('CUSTOM');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   
-  // Data & Tabs
   const [activeTab, setActiveTab] = useState<'PROJECTS' | 'TASKS'>('PROJECTS');
   const [reportData, setReportData] = useState<{projects: any[], tasks: any[]} | null>(null);
-
+  
   const router = useRouter();
 
-  // --- INITIAL LOAD (User Permissions) ---
   useEffect(() => {
     const userStr = localStorage.getItem('user');
     const token = localStorage.getItem('token');
-
-    if (!userStr || !token) {
-        router.push('/login');
-        return;
-    }
+    if (!userStr || !token) { router.push('/login'); return; }
 
     const currentUser = JSON.parse(userStr);
-
     if (currentUser.role === 'EMPLOYEE') {
-      // Employee: Lock to themselves
       setUsers([currentUser]);
       setSelectedUser(currentUser.id.toString());
     } else {
-      // Admin/Employer: Fetch All (WITH TOKEN)
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(res => {
-        if (res.status === 401) { router.push('/login'); return []; }
-        return res.json();
-      })
-      .then(data => {
-        if(Array.isArray(data) && data.length > 0) {
-          setUsers(data);
-          setSelectedUser(data[0].id.toString());
-        }
-      })
-      .catch(console.error);
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => res.status === 401 ? [] : res.json())
+        .then(data => {
+            if(Array.isArray(data) && data.length > 0) {
+              setUsers(data);
+              setSelectedUser(data[0].id.toString());
+            }
+        });
     }
   }, []);
 
-  // --- FETCH REPORT DATA ---
   useEffect(() => {
     if(!selectedUser) return;
     const token = localStorage.getItem('token');
-    if (!token) return;
-
-    const fetchReport = async () => {
-      try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/user?userId=${selectedUser}&start=${startDate}&end=${endDate}`, {
-             headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (res.status === 401) return;
-
-        const data = await res.json();
-        setReportData(data);
-      } catch (err) {
-        console.error("Failed to load report", err);
-      }
-    };
-
-    fetchReport();
+    
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/reports/user?userId=${selectedUser}&start=${startDate}&end=${endDate}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.ok ? res.json() : null)
+      .then(setReportData)
+      .catch(console.error);
   }, [selectedUser, startDate, endDate]);
 
-  // --- DATE LOGIC HANDLERS ---
   const handleFilterChange = (type: 'CUSTOM' | 'MONTH' | 'WEEK_MF' | 'WEEK_SS') => {
     setFilterType(type);
     const today = new Date();
@@ -89,15 +68,13 @@ export default function UserReportPage() {
     } 
     else if (type === 'WEEK_MF') {
       const start = startOfWeek(today, { weekStartsOn: 1 });
-      const end = addDays(start, 4);
       setStartDate(format(start, 'yyyy-MM-dd'));
-      setEndDate(format(end, 'yyyy-MM-dd'));
+      setEndDate(format(addDays(start, 4), 'yyyy-MM-dd'));
     }
     else if (type === 'WEEK_SS') {
       const sat = startOfWeek(today, { weekStartsOn: 6 }); 
-      const sun = addDays(sat, 1);
       setStartDate(format(sat, 'yyyy-MM-dd'));
-      setEndDate(format(sun, 'yyyy-MM-dd'));
+      setEndDate(format(addDays(sat, 1), 'yyyy-MM-dd'));
     }
   };
 
@@ -123,94 +100,159 @@ export default function UserReportPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-800">User Report</h2>
+    <div className="min-h-screen bg-[#F8FAFC] p-8 font-sans text-slate-900">
+      
+      {/* HEADER */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-900">User Report</h1>
+        <p className="text-slate-500 mt-1">Detailed breakdown of time distribution.</p>
+      </div>
 
-      {/* FILTERS BAR */}
-      <div className="bg-white p-4 rounded shadow-sm border border-gray-200 flex flex-wrap gap-4 items-center justify-between">
-        
-        {/* User Select */}
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-semibold text-gray-700">User:</label>
-          <select 
-            className="border rounded px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500"
-            value={selectedUser}
-            onChange={(e) => setSelectedUser(e.target.value)}
-          >
-            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
-        </div>
-
-        {/* Date Filter Controls */}
-        <div className="flex items-center gap-3 bg-gray-50 p-1 rounded border">
-          {['CUSTOM', 'MONTH', 'WEEK_MF', 'WEEK_SS'].map((type: any) => (
-             <button 
-               key={type}
-               onClick={() => handleFilterChange(type)}
-               className={`px-3 py-1 text-sm rounded ${filterType === type ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+      {/* CONTROLS CARD */}
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-8 flex flex-wrap items-center gap-6">
+         
+         {/* User */}
+         <div className="flex flex-col gap-1">
+             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><Icons.User /> Select User</label>
+             <select 
+                className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-2 outline-none focus:border-blue-500 font-medium min-w-[200px]"
+                value={selectedUser}
+                onChange={(e) => setSelectedUser(e.target.value)}
              >
-               {type === 'WEEK_MF' ? 'Mon-Fri' : type === 'WEEK_SS' ? 'Sat-Sun' : type.charAt(0) + type.slice(1).toLowerCase()}
-             </button>
-          ))}
-        </div>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+             </select>
+         </div>
 
-        {/* Date Display */}
-        <div className="flex items-center gap-2">
-          {filterType !== 'CUSTOM' && <button onClick={() => shiftDate('PREV')} className="p-1 hover:bg-gray-100 rounded">◀</button>}
-          <input type="date" className="border rounded px-2 py-1 text-sm" value={startDate} onChange={(e) => { setStartDate(e.target.value); setFilterType('CUSTOM'); }} />
-          <span className="text-gray-400">to</span>
-          <input type="date" className="border rounded px-2 py-1 text-sm" value={endDate} onChange={(e) => { setEndDate(e.target.value); setFilterType('CUSTOM'); }} />
-          {filterType !== 'CUSTOM' && <button onClick={() => shiftDate('NEXT')} className="p-1 hover:bg-gray-100 rounded">▶</button>}
-        </div>
-      </div>
+         <div className="w-px h-10 bg-slate-100 hidden md:block" />
 
-      {/* TABS */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex gap-6">
-          <button onClick={() => setActiveTab('PROJECTS')} className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'PROJECTS' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>PROJECT SUMMARY</button>
-          <button onClick={() => setActiveTab('TASKS')} className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'TASKS' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'}`}>TASK SUMMARY</button>
-        </nav>
-      </div>
+         {/* Quick Filters */}
+         <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+             {['MONTH', 'WEEK_MF', 'WEEK_SS', 'CUSTOM'].map((type: any) => (
+                 <button 
+                    key={type}
+                    onClick={() => handleFilterChange(type)}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        filterType === type 
+                        ? 'bg-white text-blue-600 shadow-sm' 
+                        : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                 >
+                    {type === 'WEEK_MF' ? 'Mon-Fri' : type === 'WEEK_SS' ? 'Sat-Sun' : type === 'MONTH' ? 'Month' : 'Custom'}
+                 </button>
+             ))}
+         </div>
 
-      {/* DATA TABLE */}
-      <div className="bg-white rounded shadow border border-gray-200 overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">{activeTab === 'PROJECTS' ? 'Project Name' : 'Task Name'}</th>
-              <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-center">Tracked Time</th>
-              <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-center">Manual Time</th>
-              <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-right">Total Time</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {/* PROJECTS TAB */}
-            {activeTab === 'PROJECTS' && reportData?.projects?.map((item, idx) => (
-              <tr key={idx} className="hover:bg-gray-50">
-                <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
-                <td className="px-6 py-4 text-center font-mono text-green-600">{formatTime(item.trackedSeconds)}</td>
-                <td className="px-6 py-4 text-center font-mono text-yellow-600">{formatTime(item.manualSeconds)}</td>
-                <td className="px-6 py-4 text-right font-mono text-blue-700 bg-blue-50 font-bold">{formatTime(item.totalSeconds)}</td>
-              </tr>
-            ))}
-            
-            {/* TASKS TAB */}
-            {activeTab === 'TASKS' && reportData?.tasks?.map((item, idx) => (
-              <tr key={idx} className="hover:bg-gray-50">
-                <td className="px-6 py-4 font-medium text-gray-900">{item.name}</td>
-                <td className="px-6 py-4 text-center font-mono text-green-600">{formatTime(item.trackedSeconds)}</td>
-                <td className="px-6 py-4 text-center font-mono text-yellow-600">{formatTime(item.manualSeconds)}</td>
-                <td className="px-6 py-4 text-right font-mono text-blue-700 bg-blue-50 font-bold">{formatTime(item.totalSeconds)}</td>
-              </tr>
-            ))}
-
-             {/* NO DATA STATE */}
-             {((activeTab === 'PROJECTS' && (!reportData?.projects || reportData?.projects.length === 0)) || 
-               (activeTab === 'TASKS' && (!reportData?.tasks || reportData?.tasks.length === 0))) && (
-               <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-400 italic">No data found for this time period.</td></tr>
+         {/* Date Range */}
+         <div className="flex items-center gap-2 ml-auto">
+             {filterType !== 'CUSTOM' && (
+                 <button onClick={() => shiftDate('PREV')} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-blue-600 transition"><Icons.ArrowLeft /></button>
              )}
-          </tbody>
-        </table>
+             <div className="flex items-center border border-slate-200 rounded-lg bg-white px-3 py-2 shadow-sm gap-2">
+                 <Icons.Calendar />
+                 <input type="date" className="text-sm font-medium text-slate-700 outline-none w-32" value={startDate} onChange={(e) => { setStartDate(e.target.value); setFilterType('CUSTOM'); }} />
+                 <span className="text-slate-300">→</span>
+                 <input type="date" className="text-sm font-medium text-slate-700 outline-none w-32" value={endDate} onChange={(e) => { setEndDate(e.target.value); setFilterType('CUSTOM'); }} />
+             </div>
+             {filterType !== 'CUSTOM' && (
+                 <button onClick={() => shiftDate('NEXT')} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400 hover:text-blue-600 transition"><Icons.ArrowRight /></button>
+             )}
+         </div>
+      </div>
+
+      {/* MAIN CONTENT Area */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        
+        {/* TABS HEADER */}
+        <div className="flex border-b border-slate-100">
+            <button 
+                onClick={() => setActiveTab('PROJECTS')}
+                className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
+                    activeTab === 'PROJECTS' 
+                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' 
+                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                }`}
+            >
+                <Icons.Briefcase /> Project Summary
+            </button>
+            <button 
+                onClick={() => setActiveTab('TASKS')}
+                className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${
+                    activeTab === 'TASKS' 
+                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' 
+                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                }`}
+            >
+                <Icons.List /> Task Summary
+            </button>
+        </div>
+
+        {/* DATA TABLE */}
+        <div className="overflow-x-auto">
+           <table className="w-full text-left">
+              <thead className="bg-slate-50/80 border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wider font-bold">
+                 <tr>
+                    <th className="px-6 py-4">{activeTab === 'PROJECTS' ? 'Project Name' : 'Task Name'}</th>
+                    <th className="px-6 py-4 text-center">Tracked Time</th>
+                    <th className="px-6 py-4 text-center">Manual Time</th>
+                    <th className="px-6 py-4 text-right">Total Time</th>
+                 </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 text-sm">
+                 <AnimatePresence mode='wait'>
+                    {((activeTab === 'PROJECTS' ? reportData?.projects : reportData?.tasks) || []).map((item: any, i) => (
+                        <motion.tr 
+                            key={i}
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.03 }}
+                            className="hover:bg-blue-50/30 transition-colors group"
+                        >
+                            <td className="px-6 py-4 font-bold text-slate-700 group-hover:text-blue-700 transition-colors">
+                                {item.name}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                                <span className="bg-green-50 text-green-700 font-mono font-bold px-2 py-1 rounded border border-green-100">
+                                    {formatTime(item.trackedSeconds)}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                                <span className="bg-amber-50 text-amber-700 font-mono font-bold px-2 py-1 rounded border border-amber-100">
+                                    {formatTime(item.manualSeconds)}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                                <span className="bg-slate-100 text-slate-800 font-mono font-bold px-3 py-1.5 rounded-lg border border-slate-200">
+                                    {formatTime(item.totalSeconds)}
+                                </span>
+                            </td>
+                        </motion.tr>
+                    ))}
+                 </AnimatePresence>
+                 
+                 {(!reportData || (activeTab === 'PROJECTS' ? !reportData.projects?.length : !reportData.tasks?.length)) && (
+                     <tr>
+                         <td colSpan={4} className="px-6 py-12 text-center">
+                             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300">
+                                 <Icons.List />
+                             </div>
+                             <p className="text-slate-400 italic">No data found based on current filters.</p>
+                         </td>
+                     </tr>
+                 )}
+              </tbody>
+           </table>
+        </div>
+        
+        {/* FOOTER TOTALS */}
+        <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-6">
+            <div className="text-right">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Grand Total</div>
+                <div className="text-2xl font-bold text-slate-800 font-mono">
+                    {formatTime((reportData?.projects || []).reduce((acc: number, curr: any) => acc + curr.totalSeconds, 0))}
+                </div>
+            </div>
+        </div>
+
       </div>
     </div>
   );

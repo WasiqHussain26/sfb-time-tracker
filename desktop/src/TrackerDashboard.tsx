@@ -94,6 +94,11 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         else handleStartTimer();
       });
 
+      // TRIGGER BREAK MODE (Mini Widget - Silent)
+      ipcRenderer.on('trigger-break-mode', () => {
+        if (activeSessionRef.current) handleStopTimer(false, true);
+      });
+
       // HEARTBEAT
       const heartbeatInterval = setInterval(async () => {
         try {
@@ -120,6 +125,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         ipcRenderer.removeAllListeners('system-idle-status');
         ipcRenderer.removeAllListeners('update_downloaded');
         ipcRenderer.removeAllListeners('trigger-timer-toggle');
+        ipcRenderer.removeAllListeners('trigger-break-mode');
         clearInterval(heartbeatInterval);
       };
     }
@@ -290,14 +296,26 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
   };
 
   const handleStopTimer = async (isAutoStop = false, isBreak = false) => {
+    // 1. AUTO-STOP: Immediate
     if (isAutoStop) {
       const limit = autoStopLimitRef.current || 5;
       await executeStop(`Auto-stopped due to inactivity (${limit}m limit).`);
       return;
     }
+
+    // 2. BREAK MODE: Direct Execution (No Modal, No Confirm)
+    if (isBreak) {
+      await executeStop("[BREAK]");
+      new Notification("Break Started", { body: "Timer paused for break." });
+      return;
+    }
+
+    // 3. STOP MODE: Open Modal for Notes
     setStopNotes('');
-    setIsBreakMode(isBreak);
+    setIsBreakMode(false);
     setIsStopModalOpen(true);
+    // Ensure input is not disabled by stale state
+    setStopLoading(false);
   };
 
   const handleInstallUpdate = async () => {
@@ -313,19 +331,21 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
   const handleConfirmManualStop = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // VALIDATION: Notes mandatory only if NOT break mode
-    if (!isBreakMode && !stopNotes.trim()) {
+    // VALIDATION: Notes mandatory for STOP
+    if (!stopNotes.trim()) {
       return alert("Notes are compulsory for documentation.");
     }
 
     setStopLoading(true);
-    const finalNote = isBreakMode ? `[BREAK] ${stopNotes}` : stopNotes;
-    await executeStop(finalNote);
-
-    setStopLoading(false);
-    setIsStopModalOpen(false);
-    if (isBreakMode) {
-      new Notification("Break Started", { body: "Your session has been saved and timer paused." });
+    // Safe guard: try-catch to ensure loading state is reset even if API fails
+    try {
+      await executeStop(stopNotes);
+      setIsStopModalOpen(false);
+    } catch (error) {
+      console.error("Stop failed", error);
+      alert("Failed to stop timer. Please try again.");
+    } finally {
+      setStopLoading(false);
     }
   };
 
@@ -346,8 +366,13 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         setIsSystemIdle(false);
         isStoppingRef.current = false; // <--- UNLOCK
         fetchStats();
+      } else {
+        throw new Error("API responded with error");
       }
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      throw err; // Re-throw to handle in caller
+    }
   };
 
   // Helpers
@@ -362,6 +387,17 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
     return `${h}h ${m}m`;
   };
+
+  // --- FOCUS-FIX ---
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (isStopModalOpen && textareaRef.current) {
+      // Force focus with a slight delay to ensure render is complete
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 50);
+    }
+  }, [isStopModalOpen]);
 
   return (
     // THEME: BRAND BLUE (bg-blue-600)
@@ -548,11 +584,11 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
             <div className="p-3">
               <form onSubmit={handleConfirmManualStop}>
                 <textarea
+                  ref={textareaRef}
                   className="w-full border border-slate-200 rounded p-2 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none h-20 resize-none bg-slate-50 text-slate-800 placeholder-slate-400"
                   placeholder={isBreakMode ? "Notes (Optional)" : "What did you work on? (Compulsory)"}
                   value={stopNotes}
                   onChange={(e) => setStopNotes(e.target.value)}
-                  autoFocus
                 />
                 <div className="flex gap-2 mt-3 justify-end">
                   <button
