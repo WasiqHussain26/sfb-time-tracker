@@ -4,4 +4,5 @@ export class CreateUserDto {
   name: string;
   role?: 'ADMIN' | 'EMPLOYER' | 'EMPLOYEE';
   hourlyRate?: number;
+  autoStopLimit?: number;
 }

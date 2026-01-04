@@ -5,15 +5,15 @@ import AuthGuard from '@/components/AuthGuard'; // <--- Import Guard
 
 function TeamPageContent() {
   const [users, setUsers] = useState<any[]>([]);
-  
+
   // --- MODAL STATES ---
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(false);
-  
+
   // New: Edit User Modal State
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<{ id: number; name: string; email: string } | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', password: '' });
+  const [editForm, setEditForm] = useState({ name: '', password: '', autoStopLimit: 5 });
 
   const [currentUserRole, setCurrentUserRole] = useState('');
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
@@ -32,22 +32,22 @@ function TeamPageContent() {
       const token = localStorage.getItem('token');
       const userStr = localStorage.getItem('user');
       if (userStr) setCurrentUserRole(JSON.parse(userStr).role);
-      
+
       if (!token) return;
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
-         headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (res.status === 401 || res.status === 403) {
-         localStorage.clear();
-         window.location.href = '/login';
-         return;
+        localStorage.clear();
+        window.location.href = '/login';
+        return;
       }
 
       const data = await res.json();
       setUsers(Array.isArray(data) ? data : []);
-      
+
       if (data.length > 0) {
         setGlobalLimit(data[0].autoStopLimit || 5);
       }
@@ -61,7 +61,7 @@ function TeamPageContent() {
   // 1. OPEN EDIT MODAL
   const openEditModal = (user: any) => {
     setEditingUser(user);
-    setEditForm({ name: user.name, password: '' });
+    setEditForm({ name: user.name, password: '', autoStopLimit: user.autoStopLimit || 5 });
     setIsEditOpen(true);
   };
 
@@ -73,30 +73,33 @@ function TeamPageContent() {
     const token = localStorage.getItem('token');
     const toastId = toast.loading("Updating user...");
 
-    const payload: any = { name: editForm.name };
+    const payload: any = {
+      name: editForm.name,
+      autoStopLimit: editForm.autoStopLimit
+    };
     if (editForm.password.trim() !== '') {
-        payload.password = editForm.password;
+      payload.password = editForm.password;
     }
 
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${editingUser.id}`, {
-            method: 'PATCH',
-            headers: { 
-                'Content-Type': 'application/json', 
-                Authorization: `Bearer ${token}` 
-            },
-            body: JSON.stringify(payload)
-        });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${editingUser.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
 
-        if (res.ok) {
-            toast.success("User updated successfully!", { id: toastId });
-            setIsEditOpen(false);
-            fetchUsers();
-        } else {
-            toast.error("Failed to update user", { id: toastId });
-        }
+      if (res.ok) {
+        toast.success("User updated successfully!", { id: toastId });
+        setIsEditOpen(false);
+        fetchUsers();
+      } else {
+        toast.error("Failed to update user", { id: toastId });
+      }
     } catch (err) {
-        toast.error("Network Error", { id: toastId });
+      toast.error("Network Error", { id: toastId });
     }
   };
 
@@ -107,19 +110,19 @@ function TeamPageContent() {
     const toastId = toast.loading("Updating company policy...");
 
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/global-settings`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ autoStopLimit: Number(globalLimit) })
-        });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/global-settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ autoStopLimit: Number(globalLimit) })
+      });
 
-        if (res.ok) {
-            toast.success("Updated for ALL users!", { id: toastId });
-            setIsGlobalSettingsOpen(false);
-            fetchUsers();
-        } else {
-            toast.error("Failed to update", { id: toastId });
-        }
+      if (res.ok) {
+        toast.success("Updated for ALL users!", { id: toastId });
+        setIsGlobalSettingsOpen(false);
+        fetchUsers();
+      } else {
+        toast.error("Failed to update", { id: toastId });
+      }
     } catch (err) { toast.error("Network Error", { id: toastId }); }
   };
 
@@ -132,21 +135,21 @@ function TeamPageContent() {
     const toastId = toast.loading(`${action}ing user...`);
 
     try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${userId}/status`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ status: newStatus })
-        });
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${userId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: newStatus })
+      });
 
-        if (res.ok) {
-            toast.success(`User ${action}d!`, { id: toastId });
-            fetchUsers();
-        } else {
-            toast.error("Failed", { id: toastId });
-        }
+      if (res.ok) {
+        toast.success(`User ${action}d!`, { id: toastId });
+        fetchUsers();
+      } else {
+        toast.error("Failed", { id: toastId });
+      }
     } catch (e) { toast.error("Error", { id: toastId }); }
   };
-  
+
   // 5. INVITE
   const handleInviteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,26 +173,26 @@ function TeamPageContent() {
   };
 
   const displayedUsers = users.filter(u => {
-      if (activeTab === 'ACTIVE') return u.status === 'ACTIVE' || u.status === 'INVITED';
-      return u.status === 'DISABLED';
+    if (activeTab === 'ACTIVE') return u.status === 'ACTIVE' || u.status === 'INVITED';
+    return u.status === 'DISABLED';
   });
 
   const canManage = currentUserRole === 'EMPLOYER';
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
-      
+
       {/* HEADER */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-800">Team Management</h2>
-        
+
         {canManage && (
           <div className="flex gap-2">
             <button onClick={() => setIsGlobalSettingsOpen(true)} className="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-700 font-medium text-sm flex items-center gap-2">
-                ⚙️ Global Settings
+              ⚙️ Global Settings
             </button>
             <button onClick={() => setIsInviteOpen(true)} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium text-sm">
-                + Invite User
+              + Invite User
             </button>
           </div>
         )}
@@ -222,44 +225,43 @@ function TeamPageContent() {
             {displayedUsers.map((user) => (
               <tr key={user.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 font-medium text-gray-800">
-                    <div>{user.name}</div>
-                    <div className="text-xs text-gray-500 font-normal">{user.email}</div>
+                  <div>{user.name}</div>
+                  <div className="text-xs text-gray-500 font-normal">{user.email}</div>
                 </td>
                 <td className="px-6 py-4">
-                  <span className={`px-2 py-1 text-[10px] rounded-full font-bold uppercase ${
-                    user.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 
+                  <span className={`px-2 py-1 text-[10px] rounded-full font-bold uppercase ${user.status === 'ACTIVE' ? 'bg-green-100 text-green-700' :
                     user.status === 'INVITED' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
-                  }`}>
+                    }`}>
                     {user.status}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-xs font-bold text-gray-600 uppercase">
-                    {user.role}
+                  {user.role}
                 </td>
-                
-                <td className="px-6 py-4 text-right flex justify-end gap-2 items-center h-full mt-3">
-                    {canManage && user.role !== 'EMPLOYER' && (
-                        <>
-                            {/* EDIT BUTTON */}
-                            <button 
-                                onClick={() => openEditModal(user)}
-                                className="text-blue-600 hover:text-blue-900 text-xs font-medium border border-blue-200 px-3 py-1 rounded hover:bg-blue-50 mr-2"
-                            >
-                                Edit / Reset Pass
-                            </button>
 
-                            {/* DEACTIVATE BUTTON */}
-                            {activeTab === 'ACTIVE' ? (
-                                <button onClick={() => toggleUserStatus(user.id, 'DISABLED')} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 hover:bg-red-50 px-3 py-1 rounded">
-                                    Deactivate
-                                </button>
-                            ) : (
-                                <button onClick={() => toggleUserStatus(user.id, 'ACTIVE')} className="text-green-500 hover:text-green-700 text-xs font-bold border border-green-200 hover:bg-green-50 px-3 py-1 rounded">
-                                    Reactivate
-                                </button>
-                            )}
-                        </>
-                    )}
+                <td className="px-6 py-4 text-right flex justify-end gap-2 items-center h-full mt-3">
+                  {canManage && user.role !== 'EMPLOYER' && (
+                    <>
+                      {/* EDIT BUTTON */}
+                      <button
+                        onClick={() => openEditModal(user)}
+                        className="text-blue-600 hover:text-blue-900 text-xs font-medium border border-blue-200 px-3 py-1 rounded hover:bg-blue-50 mr-2"
+                      >
+                        Edit / Reset Pass
+                      </button>
+
+                      {/* DEACTIVATE BUTTON */}
+                      {activeTab === 'ACTIVE' ? (
+                        <button onClick={() => toggleUserStatus(user.id, 'DISABLED')} className="text-red-500 hover:text-red-700 text-xs font-bold border border-red-200 hover:bg-red-50 px-3 py-1 rounded">
+                          Deactivate
+                        </button>
+                      ) : (
+                        <button onClick={() => toggleUserStatus(user.id, 'ACTIVE')} className="text-green-500 hover:text-green-700 text-xs font-bold border border-green-200 hover:bg-green-50 px-3 py-1 rounded">
+                          Reactivate
+                        </button>
+                      )}
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
@@ -274,32 +276,47 @@ function TeamPageContent() {
           <div className="bg-white p-6 rounded-lg w-[400px] shadow-2xl border border-gray-200">
             <h3 className="text-xl font-bold mb-1 text-gray-800">Edit User</h3>
             <p className="text-xs text-gray-500 mb-6">Updating details for {editingUser.email}</p>
-            
+
             <form onSubmit={handleEditSubmit} className="space-y-5">
-              
+
               {/* Name Field */}
               <div>
                 <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Full Name</label>
-                <input 
-                    type="text" 
-                    required 
-                    className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={editForm.name} 
-                    onChange={(e) => setEditForm({...editForm, name: e.target.value})} 
+                <input
+                  type="text"
+                  required
+                  className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 />
               </div>
 
               {/* Password Field */}
               <div>
                 <label className="block text-xs font-bold text-gray-600 uppercase mb-1">New Password</label>
-                <input 
-                    type="text" 
-                    placeholder="Leave blank to keep current password"
-                    className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
-                    value={editForm.password} 
-                    onChange={(e) => setEditForm({...editForm, password: e.target.value})} 
+                <input
+                  type="text"
+                  placeholder="Leave blank to keep current password"
+                  className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+                  value={editForm.password}
+                  onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
                 />
                 <p className="text-[10px] text-gray-400 mt-1">Only enter a value if you want to reset their password.</p>
+              </div>
+
+              {/* Auto Stop Limit */}
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Inactivity Timer (Minutes)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="120"
+                  required
+                  className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={editForm.autoStopLimit}
+                  onChange={(e) => setEditForm({ ...editForm, autoStopLimit: Number(e.target.value) })}
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Time before timer automatically stops if inactive.</p>
               </div>
 
               <div className="flex justify-end gap-2 mt-6">
@@ -317,18 +334,18 @@ function TeamPageContent() {
           <div className="bg-white p-6 rounded-lg w-[400px] shadow-2xl border border-gray-200">
             <h3 className="text-lg font-bold mb-1 text-gray-800">Global Policy</h3>
             <p className="text-xs text-gray-500 mb-4">This setting applies to ALL employees.</p>
-            
+
             <form onSubmit={handleGlobalSettingsSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Inactivity Auto-Stop (Minutes)</label>
-                <input 
-                    type="number" 
-                    min="1" 
-                    max="120"
-                    required 
-                    className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={globalLimit} 
-                    onChange={(e) => setGlobalLimit(Number(e.target.value))} 
+                <input
+                  type="number"
+                  min="1"
+                  max="120"
+                  required
+                  className="w-full border p-2 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={globalLimit}
+                  onChange={(e) => setGlobalLimit(Number(e.target.value))}
                 />
               </div>
               <div className="flex justify-end gap-2 mt-6">
@@ -344,28 +361,28 @@ function TeamPageContent() {
       {isInviteOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg w-[400px] shadow-2xl">
-             <h3 className="text-xl font-bold mb-4 text-gray-800">Invite User</h3>
-             <form onSubmit={handleInviteSubmit} className="space-y-4">
-                <input type="text" placeholder="Full Name" required className="w-full border rounded px-3 py-2 text-sm"
-                  value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
-                <input type="email" placeholder="Email Address" required className="w-full border rounded px-3 py-2 text-sm"
-                  value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <select className="border rounded px-3 py-2 text-sm" value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})}>
-                    <option value="EMPLOYEE">Employee</option>
-                    <option value="ADMIN">Admin</option>
-                    <option value="EMPLOYER">Employer</option> 
-                  </select>
-                  <input type="number" placeholder="Rate ($)" className="border rounded px-3 py-2 text-sm"
-                    value={formData.hourlyRate} onChange={(e) => setFormData({...formData, hourlyRate: Number(e.target.value)})} />
-                </div>
+            <h3 className="text-xl font-bold mb-4 text-gray-800">Invite User</h3>
+            <form onSubmit={handleInviteSubmit} className="space-y-4">
+              <input type="text" placeholder="Full Name" required className="w-full border rounded px-3 py-2 text-sm"
+                value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+              <input type="email" placeholder="Email Address" required className="w-full border rounded px-3 py-2 text-sm"
+                value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
 
-                <div className="flex justify-end gap-2 mt-4">
-                  <button type="button" onClick={() => setIsInviteOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded text-sm">Cancel</button>
-                  <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium">Send</button>
-                </div>
-             </form>
+              <div className="grid grid-cols-2 gap-4">
+                <select className="border rounded px-3 py-2 text-sm" value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })}>
+                  <option value="EMPLOYEE">Employee</option>
+                  <option value="ADMIN">Admin</option>
+                  <option value="EMPLOYER">Employer</option>
+                </select>
+                <input type="number" placeholder="Rate ($)" className="border rounded px-3 py-2 text-sm"
+                  value={formData.hourlyRate} onChange={(e) => setFormData({ ...formData, hourlyRate: Number(e.target.value) })} />
+              </div>
+
+              <div className="flex justify-end gap-2 mt-4">
+                <button type="button" onClick={() => setIsInviteOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded text-sm">Cancel</button>
+                <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium">Send</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -375,9 +392,9 @@ function TeamPageContent() {
 
 // WRAP WITH AUTHGUARD
 export default function TeamPage() {
-    return (
-        <AuthGuard allowedRoles={['EMPLOYER', 'ADMIN']}>
-            <TeamPageContent />
-        </AuthGuard>
-    );
+  return (
+    <AuthGuard allowedRoles={['EMPLOYER', 'ADMIN']}>
+      <TeamPageContent />
+    </AuthGuard>
+  );
 }

@@ -38,7 +38,7 @@ export class MailService {
   // 2. SEND DAILY REPORT (Single Employee)
   async sendEmployeeReport(email: string, name: string, dayReport: string, weekReport: string) {
     try {
-      await this.resend.emails.send({
+      const data = await this.resend.emails.send({
         from: 'SFB Time Tracker <no-reply@sfbtimetracker.com>',
         to: email,
         subject: `Your Daily Activity Report - ${new Date().toLocaleDateString()}`,
@@ -59,9 +59,12 @@ export class MailService {
           </div>
         `,
       });
-      console.log(`✅ Report sent to ${email}`);
+      console.log(`✅ [MailService] Report sent to ${email}. ID: ${data?.data?.id || 'No ID'}`);
+      if (data.error) {
+        console.error(`⚠️ [MailService] Resend API Warning for ${email}:`, data.error);
+      }
     } catch (error) {
-      console.error(`❌ Failed to send report to ${email}:`, error);
+      console.error(`❌ [MailService] FATAL ERROR sending to ${email}:`, error);
     }
   }
 
