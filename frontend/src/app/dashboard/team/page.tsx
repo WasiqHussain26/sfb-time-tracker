@@ -96,6 +96,24 @@ function TeamPageContent() {
     fetchUsers();
   };
 
+  const handleDeleteUser = async (userId: number) => {
+    if(!confirm("ARE YOU SURE? This will permanently delete this user, all their time logs, screenshots, and reports. This action CANNOT be undone.")) return;
+    const token = localStorage.getItem('token');
+    const toastId = toast.loading("Deleting user...");
+    try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${userId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+            toast.success("User Deleted Permanently", { id: toastId });
+            fetchUsers();
+        } else {
+            toast.error("Failed to delete", { id: toastId });
+        }
+    } catch (e) { console.error(e); toast.error("Error", { id: toastId }); }
+  };
+
   const handleInviteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
@@ -197,7 +215,7 @@ function TeamPageContent() {
                              </div>
                         </div>
 
-                        {canManage && user.role !== 'EMPLOYER' && (
+                        {canManage && user.role !== 'EMPLOYER' && user.status !== 'DISABLED' && (
                             <button onClick={() => openEditModal(user)} className="text-slate-300 hover:text-blue-600 transition-colors p-2 hover:bg-slate-50 rounded-lg">
                                 <Icons.Edit />
                             </button>
@@ -220,11 +238,16 @@ function TeamPageContent() {
                     {canManage && user.role !== 'EMPLOYER' && (
                         <div className="mt-6 pt-4 border-t border-slate-50 flex justify-end gap-2">
                              {user.status === 'DISABLED' ? (
-                                 <button onClick={() => toggleUserStatus(user.id, 'ACTIVE')} className="text-xs font-bold text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors">
-                                     Reactivate Account
-                                 </button>
+                                 <div className="flex items-center gap-2 w-full justify-between">
+                                     <button onClick={() => handleDeleteUser(user.id)} className="text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                                         <Icons.Trash /> Delete Forever
+                                     </button>
+                                     <button onClick={() => toggleUserStatus(user.id, 'ACTIVE')} className="text-xs font-bold text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors">
+                                         Reactivate
+                                     </button>
+                                 </div>
                              ) : (
-                                 <button onClick={() => toggleUserStatus(user.id, 'DISABLED')} className="text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                                 <button onClick={() => toggleUserStatus(user.id, 'DISABLED')} className="text-xs font-bold text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 ml-auto">
                                      <Icons.Trash /> Deactivate
                                  </button>
                              )}

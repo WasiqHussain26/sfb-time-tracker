@@ -5,6 +5,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { randomUUID } from 'crypto'; 
 import * as bcrypt from 'bcrypt';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class UsersService {
@@ -31,6 +32,7 @@ export class UsersService {
         role: createUserDto.role || 'EMPLOYEE',
         status: 'ACTIVE',
         autoStopLimit: 5,
+        lastActive: new Date(),
       },
     });
   }
@@ -97,7 +99,8 @@ export class UsersService {
         role: true, 
         hourlyRate: true, 
         status: true,
-        autoStopLimit: true 
+        autoStopLimit: true,
+        lastActive: true
       }
     });
   }
@@ -134,14 +137,79 @@ export class UsersService {
   // Helpers
   findOne(id: number) { return this.prisma.user.findUnique({ where: { id } }); }
 
-  // *** IMPORTANT: UPDATED HASHING LOGIC HERE ***
   async update(id: number, updateUserDto: UpdateUserDto) {
-    // If password is provided, hash it first
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
     return this.prisma.user.update({ where: { id }, data: updateUserDto });
   }
 
-  remove(id: number) { return this.prisma.user.delete({ where: { id } }); }
+  async remove(id: number) {
+    const sessions = await this.prisma.timeSession.findMany({
+      where: { userId: id },
+      select: { id: true }
+    });
+    
+    const sessionIds = sessions.map(s => s.id);
+    if (sessionIds.length > 0) {
+      await this.prisma.screenshot.deleteMany({
+        where: { timeSessionId: { in: sessionIds } }
+      });
+      await this.prisma.timeSession.deleteMany({
+        where: { userId: id }
+      });
+    }
+    return this.prisma.user.delete({ where: { id } });
+  }
+
+  // --- NEW METHODS ---
+
+  // PING: Heartbeat to update lastActive
+  async ping(id: number) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { lastActive: new Date() },
+      select: { id: true, status: true, autoStopLimit: true } 
+    });
+  }
+
+  // CRON JOB: Clean up stale sessions
+  // Checks every 5 minutes for users who haven't pinged in 6+ minutes
+  @Cron('0 */5 * * * *') 
+  async handleStaleSessions() {
+    const staleThreshold = new Date(Date.now() - 6 * 60 * 1000); // 6 mins ago
+
+    // Find users with active sessions AND who haven't been active recently
+    const staleSessions = await this.prisma.timeSession.findMany({
+        where: {
+            endTime: null,
+            user: {
+                lastActive: { lt: staleThreshold }
+            }
+        },
+        include: { user: true }
+    });
+
+    if (staleSessions.length > 0) {
+        console.log(`🧹 Cleaning up ${staleSessions.length} stale sessions...`);
+
+        for (const session of staleSessions) {
+            // Use the user's lastActive time as the end time (or session start if it's weirdly older)
+            // Fallback: If lastActive is somehow before startTime, use startTime (0 duration)
+            let endTime = session.user.lastActive;
+            if (endTime < session.startTime) endTime = new Date(); // Should rarely happen, just safe guard
+
+            const duration = Math.floor((endTime.getTime() - session.startTime.getTime()) / 1000);
+
+            await this.prisma.timeSession.update({
+                where: { id: session.id },
+                data: {
+                    endTime: endTime,
+                    duration: duration > 0 ? duration : 0,
+                    notes: (session.notes || "") + "\n[System: Auto-stopped due to shutdown/offline]"
+                }
+            });
+        }
+    }
+  }
 }

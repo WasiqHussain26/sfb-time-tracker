@@ -1,6 +1,7 @@
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -38,8 +39,9 @@ model User {
   status       UserStatus @default(ACTIVE) 
   hourlyRate   Decimal?   @default(0.0)
   
-  // --- ADD THIS LINE ---
+  // --- ADDED THIS LINE ---
   autoStopLimit Int       @default(5) // Minutes before timer auto-stops
+  lastActive    DateTime  @default(now()) // <--- NEW: Tracks last heartbeat
   
   inviteToken  String?
   createdAt    DateTime   @default(now())
@@ -86,10 +88,9 @@ model TimeSession {
   startTime   DateTime  @default(now())
   endTime     DateTime?
   duration    Int?      @default(0)
-  idleDuration Int      @default(0) // If you track idle time separately
+  idleDuration Int      @default(0) 
   isManual    Boolean   @default(false)
   
-  // --- ADD THIS LINE ---
   notes       String?   @db.Text 
 
   userId      Int
