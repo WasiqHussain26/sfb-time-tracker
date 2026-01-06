@@ -40,7 +40,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
   const [isStopModalOpen, setIsStopModalOpen] = useState(false);
   const [stopNotes, setStopNotes] = useState('');
   const [stopLoading, setStopLoading] = useState(false);
-  const [stopError, setStopError] = useState(''); 
+  const [stopError, setStopError] = useState('');
 
   const [isBreakMode, setIsBreakMode] = useState(false);
 
@@ -58,7 +58,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
 
   // --- 1. INITIAL LOAD & LISTENERS ---
   useEffect(() => {
-    handleRefresh(); 
+    handleRefresh();
 
     if (ipcRenderer) {
       // IDLE LISTENER
@@ -77,7 +77,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
 
             handleStopTimer(true).catch(err => {
               console.error("Auto-stop failed:", err);
-              isStoppingRef.current = false; 
+              isStoppingRef.current = false;
             });
 
             new Notification("Timer Stopped", {
@@ -99,7 +99,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
           handleStopTimer(false);
         } else {
           // RESUME LOGIC
-          if (activeSessionRef.current) return; 
+          if (activeSessionRef.current) return;
 
           if (selectedTaskId) {
             handleStartTimer();
@@ -148,26 +148,26 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
         clearInterval(heartbeatInterval);
       };
     }
-  }, []); 
+  }, []);
 
   // --- 2. WIDGET SYNC ---
   useEffect(() => {
     if (ipcRenderer) {
       const timeStr = activeSession ? formatTimerBig(elapsed) : '00:00:00';
-      
+
       let displayTask = 'No Active Task';
 
       if (activeSession?.task?.name) {
         displayTask = activeSession.task.name;
       } else if (lastTaskName) {
-        displayTask = `${lastTaskName}`; 
+        displayTask = `${lastTaskName}`;
       }
 
       ipcRenderer.send('update-widget', {
         time: timeStr,
         task: displayTask,
         isRunning: !!activeSession,
-        canResume: !activeSession && !!lastTaskId 
+        canResume: !activeSession && !!lastTaskId
       });
     }
   }, [elapsed, activeSession, lastTaskName, lastTaskId]);
@@ -338,7 +338,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
     }
 
     setStopNotes('');
-    setStopError(''); 
+    setStopError('');
     setIsBreakMode(false);
     setIsStopModalOpen(true);
     setStopLoading(false);
@@ -376,6 +376,9 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
   };
 
   const executeStop = async (notes: string) => {
+    // 1. LOCK: Prevent concurrent stops if redundant
+    // (Optional: we rely on call-site lock for auto-stop, but this adds safety)
+
     try {
       const res = await fetch(`${API_URL}/time-tracking/stop`, {
         method: 'POST',
@@ -386,18 +389,31 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
           notes: notes
         })
       });
+
       if (res.ok) {
+        // STATE UPDATES
         setActiveSession(null);
+        activeSessionRef.current = null; // CRITICAL FIX: Update Ref IMMEDIATELY to prevent listener race
+
         setElapsed(0);
         setIsSystemIdle(false);
-        isStoppingRef.current = false; 
         fetchStats();
       } else {
-        throw new Error("API responded with error");
+        // If 404, session might be already closed. Treat as success locally?
+        if (res.status === 404) {
+          console.warn("Session likely already closed.");
+          setActiveSession(null);
+          activeSessionRef.current = null;
+        } else {
+          throw new Error("API responded with error");
+        }
       }
     } catch (err) {
       console.error(err);
-      throw err; 
+      throw err;
+    } finally {
+      // ALWAYS UNLOCK
+      isStoppingRef.current = false;
     }
   };
 
@@ -607,7 +623,7 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
                   value={stopNotes}
                   onChange={(e) => {
                     setStopNotes(e.target.value);
-                    if (stopError) setStopError(''); 
+                    if (stopError) setStopError('');
                   }}
                 />
 

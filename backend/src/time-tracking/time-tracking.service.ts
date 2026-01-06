@@ -116,7 +116,7 @@ export class TimeTrackingService {
     });
   }
 
-  // 5. DELETE SESSION
+  // 5. DELETE SESSION (FIXED: Cascade Delete)
   async deleteSession(sessionId: number, requestingUserId: number) {
     const session = await this.prisma.timeSession.findUnique({
       where: { id: sessionId }
@@ -134,6 +134,12 @@ export class TimeTrackingService {
         throw new BadRequestException('You do not have permission to delete this entry.');
     }
 
+    // --- FIX: Delete Screenshots First ---
+    await this.prisma.screenshot.deleteMany({
+      where: { timeSessionId: sessionId }
+    });
+
+    // --- Then Delete Session ---
     return this.prisma.timeSession.delete({
       where: { id: sessionId }
     });
