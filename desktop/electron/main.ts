@@ -25,6 +25,7 @@ function createWindows() {
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
+      backgroundThrottling: false, // <--- CRITICAL FIX: Prevent timer freeze
     },
     autoHideMenuBar: true,
     resizable: true,

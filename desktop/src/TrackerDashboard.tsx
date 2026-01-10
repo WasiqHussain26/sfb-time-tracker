@@ -410,6 +410,18 @@ export default function TrackerDashboard({ user, token, onLogout }: TrackerProps
       }
     } catch (err) {
       console.error(err);
+
+      // CRITICAL FIX: If this was an AUTO-STOP from the background,
+      // and it failed (likely network paused), we MUST kill the local session
+      // to stop the Infinite Loop of notifications.
+      if (notes.includes("Auto-stopped") || notes.includes("inactivity")) {
+        console.warn("Force-stopping local session after auto-stop failure to prevent loop.");
+        setActiveSession(null);
+        activeSessionRef.current = null;
+        setElapsed(0);
+        setIsSystemIdle(false);
+      }
+
       throw err;
     } finally {
       // ALWAYS UNLOCK
